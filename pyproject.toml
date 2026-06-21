@@ -1,0 +1,23 @@
+[project]
+name = "agentic-operational-intelligence-platform"
+version = "0.1.0"
+description = "Agentic Operational Intelligence Platform"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.111.0",
+    "uvicorn[standard]==0.30.1",
+    "pydantic==2.7.4",
+    "pandas==2.2.2",
+    "numpy==1.26.4",
+    "pyyaml==6.0.1",
+    "scikit-learn==1.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.2.2",
+]
+
+[tool.uv]
+package = false

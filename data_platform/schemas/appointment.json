@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "required": [
+    "event_id",
+    "store_id",
+    "appointment_id",
+    "event_ts",
+    "status"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "store_id": {
+      "type": "string"
+    },
+    "appointment_id": {
+      "type": "string"
+    },
+    "event_ts": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  }
+}

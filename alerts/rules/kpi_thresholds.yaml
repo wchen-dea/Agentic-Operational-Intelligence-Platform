@@ -1,0 +1,28 @@
+thresholds:
+  revenue_total:
+    min: 1000
+    severity: high
+  appointment_show_rate:
+    min: 0.65
+    severity: medium
+  refund_rate:
+    max: 0.08
+    severity: high
+  pos_invoice_capture_rate:
+    min: 0.85
+    severity: medium
+  inventory_in_stock_rate:
+    min: 0.90
+    severity: high
+  stockout_sku_count:
+    max: 3
+    severity: high
+  branded_revenue_mix_rate:
+    min: 0.22
+    severity: medium
+  average_work_order_cycle_time_minutes:
+    max: 120
+    severity: medium
+  overdue_work_order_count:
+    max: 5
+    severity: high

@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "required": [
+    "event_id",
+    "store_id",
+    "invoice_id",
+    "event_ts",
+    "invoice_amount"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "store_id": {
+      "type": "string"
+    },
+    "invoice_id": {
+      "type": "string"
+    },
+    "event_ts": {
+      "type": "string"
+    },
+    "invoice_amount": {
+      "type": "number"
+    },
+    "refund_flag": {
+      "type": "boolean"
+    }
+  }
+}
