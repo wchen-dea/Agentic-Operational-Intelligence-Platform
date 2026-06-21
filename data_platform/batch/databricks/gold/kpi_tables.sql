@@ -1,4 +1,5 @@
--- Gold KPI table examples. Adapt catalog/schema names to your Databricks workspace.
+-- Gold KPI table examples sourced from Aurora MySQL operational domains via CDC/streaming ingestion.
+-- Adapt catalog/schema names to your Databricks workspace.
 
 CREATE TABLE IF NOT EXISTS gold.store_realtime_kpis (
   store_id STRING,

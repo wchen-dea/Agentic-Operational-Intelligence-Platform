@@ -11,6 +11,7 @@ This repository is currently aligned to this target with:
 - Agent orchestration for KPI analysis, anomaly detection, promotion reasoning, and recommendation generation
 - Persona-aware responses for store managers and executives
 - Real-time KPI coverage across sales orders, appointments, POS invoices, inventory, and work orders
+- AWS Aurora MySQL as the operational source system for sales orders, appointments, POS invoices, and work orders
 - Operational strategy outputs for under-performing store diagnosis, branded upsell, and promotion adjustment
 
 ## Glossary
@@ -22,6 +23,7 @@ This repository is currently aligned to this target with:
 - Executive persona: User role focused on regional and enterprise KPI variance, prioritization, and strategy shifts.
 - Operational brief: Persona-aware summary that combines KPI state, active alerts, diagnosis, and priority actions.
 - KPI: Key Performance Indicator generated from real-time events across sales orders, appointments, POS invoices, inventory, and work orders.
+- AWS Aurora MySQL: System of record for transactional sales-order, appointment, POS-invoice, and work-order applications feeding the real-time KPI pipeline.
 
 ## Current Capabilities
 
@@ -29,9 +31,18 @@ This repository is currently aligned to this target with:
 - Agentic operational intelligence orchestrator with KPI, anomaly, promotion, and recommendation agents
 - Lightweight hybrid RAG implementation using local JSONL documents
 - Streaming KPI aggregator logic with cross-domain operational metrics
+- Source-system assumption that sales orders, appointments, POS invoices, and work orders originate from AWS Aurora MySQL
 - Sample alert rules in YAML
 - Sample schemas for sales orders, appointments, POS invoices, and work orders
 - Unit tests for KPI and agent flows
+
+## Source Systems
+
+The current project target assumes the following operating model:
+
+- AWS Aurora MySQL stores transactional data for the sales order system, appointment application, POS invoice activities, and work order activities.
+- Inventory signals may be sourced from Aurora MySQL or a downstream inventory service, but are modeled as part of the same operational KPI layer.
+- Change data capture from Aurora MySQL should feed the real-time event stream that drives KPI aggregation, anomaly detection, and executive/store-manager alerts.
 
 ## AI Operational Intelligence Focus
 
@@ -42,11 +53,11 @@ This project is designed for two decision personas:
 
 The AI layer combines KPI signals and alerts across:
 
-- Sales order system
-- Appointment application
-- POS invoice activities
+- Sales order system on AWS Aurora MySQL
+- Appointment application on AWS Aurora MySQL
+- POS invoice activities on AWS Aurora MySQL
 - Inventory health signals
-- Work order activities
+- Work order activities on AWS Aurora MySQL
 
 The resulting recommendations help teams:
 
@@ -93,7 +104,7 @@ tests/           unit tests
 
 The project is intentionally implementation-ready and extensible. Replace in-memory/local components with enterprise services as you scale:
 
-- Kafka/MSK for real-time topics
+- AWS DMS, Debezium, or application CDC from Aurora MySQL into Kafka/MSK for real-time topics
 - AWS Managed Service for Apache Flink or Databricks Structured Streaming for KPI computation
 - Delta Lake for bronze/silver/gold KPI tables
 - Databricks Vector Search, OpenSearch, Azure AI Search, or pgvector for vector retrieval
