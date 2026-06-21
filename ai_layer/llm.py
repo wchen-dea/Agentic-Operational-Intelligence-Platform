@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import logging
 import os
 from functools import lru_cache
+from typing import Any
 
 import anthropic
 
@@ -17,9 +20,18 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+def _extract_text(response: Any) -> str:
+    """Safely extract text from an Anthropic response, handling multi-block content."""
+    blocks = getattr(response, "content", None)
+    if not isinstance(blocks, list):
+        return ""
+    parts = [blk.text for blk in blocks if hasattr(blk, "text") and isinstance(blk.text, str)]
+    return "\n".join(parts).strip()
+
+
 def generate(prompt: str, system: str | None = None) -> str:
     client = _get_client()
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "model": settings.llm.model,
         "max_tokens": settings.llm.max_tokens,
         "temperature": settings.llm.temperature,
@@ -29,13 +41,16 @@ def generate(prompt: str, system: str | None = None) -> str:
         kwargs["system"] = system
     try:
         response = client.messages.create(**kwargs)
-        return response.content[0].text
-    except anthropic.APIConnectionError as e:
-        logger.error("LLM connection error: %s", e)
+        text = _extract_text(response)
+        if not text:
+            raise RuntimeError("LLM response contained no text content.")
+        return text
+    except anthropic.APIConnectionError as exc:
+        logger.error("LLM connection error: %s", exc)
         raise
-    except anthropic.RateLimitError as e:
-        logger.warning("LLM rate limit hit: %s", e)
+    except anthropic.RateLimitError as exc:
+        logger.warning("LLM rate limit hit: %s", exc)
         raise
-    except anthropic.APIStatusError as e:
-        logger.error("LLM API error (status=%d): %s", e.status_code, e.message)
+    except anthropic.APIStatusError as exc:
+        logger.error("LLM API error (status=%d): %s", exc.status_code, exc.message)
         raise

@@ -1,14 +1,22 @@
+from __future__ import annotations
+
 import logging
 import os
 from typing import Any
 
 from ai_layer.llm import generate as llm_generate
-from alerts.threshold_config import threshold_min, threshold_max
+from ai_layer.prompts import OPERATIONAL_BRIEF
+from alerts.threshold_config import threshold_max, threshold_min
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
 class RecommendationAgent:
+    def diagnose_signals(self, kpis: dict[str, Any], promo: dict[str, Any]) -> list[dict[str, str]]:
+        """Analyze KPI and promotion data to identify operational issues."""
+        return self._diagnose_signals(kpis, promo)
+
     def _diagnose_signals(self, kpis: dict[str, Any], promo: dict[str, Any]) -> list[dict[str, str]]:
         issues: list[dict[str, str]] = []
 
@@ -179,21 +187,14 @@ class RecommendationAgent:
 
         structured_readout = "\n".join(lines)
 
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            system_prompt = (
-                "You are an AI operations advisor for retail store managers and executives. "
-                "Given a structured operational readout with KPIs, alerts, and recommended actions, "
-                "produce a concise, actionable narrative summary. "
-                "Prioritize clarity and specificity. Use bullet points for actions."
-            )
-            user_prompt = (
-                f"Persona: {persona}\n\n"
-                f"Structured readout:\n{structured_readout}\n\n"
-                "Generate a concise operational intelligence brief with prioritized actions."
+        if os.environ.get(settings.llm.api_key_env_var):
+            user_prompt = OPERATIONAL_BRIEF.format_user(
+                persona=persona,
+                readout=structured_readout,
             )
             try:
-                return llm_generate(user_prompt, system=system_prompt)
-            except Exception as e:
-                logger.warning("LLM generation failed, falling back to structured readout: %s", e)
+                return llm_generate(user_prompt, system=OPERATIONAL_BRIEF.system)
+            except Exception as exc:
+                logger.warning("LLM generation failed, falling back to structured readout: %s", exc)
 
         return structured_readout

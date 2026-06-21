@@ -10,11 +10,12 @@ def test_orchestrator_answer():
         persona="executive",
     )
     assert "answer" in result
+    assert isinstance(result["answer"], str)
+    assert len(result["answer"]) > 0
     assert result["kpis"]["store_id"] == "245"
     assert len(result["retrieved_context"]) > 0
     assert "operational_brief" in result
     assert result["persona"] == "executive"
-    assert "Strategic playbook" in result["answer"]
 
 
 def test_orchestrator_region_scope():

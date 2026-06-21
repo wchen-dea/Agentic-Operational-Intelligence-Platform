@@ -1,4 +1,4 @@
-"""DAG executor with retry, fallback, and tier-parallel execution."""
+"""DAG executor with retry, fallback, tier-parallel execution, and observability."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ai_layer.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
+from observability.evaluation import tracker
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +114,15 @@ class DAGExecutor:
             try:
                 result = node.run_fn(context)
                 duration = (time.perf_counter() - start) * 1000
-                return NodeResult(
+                nr = NodeResult(
                     name=node.name,
                     success=True,
                     result=result,
                     attempts=attempts,
                     duration_ms=duration,
                 )
+                tracker.record_execution(node.name, duration, success=True, attempts=attempts)
+                return nr
             except policy.retryable_exceptions as exc:
                 last_error = exc
                 duration = (time.perf_counter() - start) * 1000
@@ -135,7 +138,7 @@ class DAGExecutor:
         if node.fallback_fn is not None:
             try:
                 fallback_result = node.fallback_fn(context, last_error)  # type: ignore[arg-type]
-                return NodeResult(
+                nr = NodeResult(
                     name=node.name,
                     success=True,
                     result=fallback_result,
@@ -143,10 +146,13 @@ class DAGExecutor:
                     duration_ms=0.0,
                     used_fallback=True,
                 )
+                tracker.record_execution(node.name, 0.0, success=True, used_fallback=True, attempts=attempts)
+                return nr
             except Exception as fb_exc:
                 logger.error("Fallback for node '%s' also failed: %s", node.name, fb_exc)
                 last_error = fb_exc
 
+        tracker.record_execution(node.name, 0.0, success=False, attempts=attempts)
         return NodeResult(
             name=node.name,
             success=False,

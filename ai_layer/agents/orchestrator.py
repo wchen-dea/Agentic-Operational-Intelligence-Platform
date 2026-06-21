@@ -11,7 +11,7 @@ from ai_layer.agents.promotion_agent import PromotionAgent
 from ai_layer.agents.recommendation_agent import RecommendationAgent
 from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
 from ai_layer.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
-from ai_layer.orchestration.router import IntentRouter, Intent
+from ai_layer.orchestration.router import IntentRouter
 from ai_layer.orchestration.executor import DAGExecutor, ExecutionTrace
 
 logger = logging.getLogger(__name__)
