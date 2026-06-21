@@ -2,30 +2,71 @@ thresholds:
   revenue_total:
     min: 1000
     severity: high
+    unit: USD
+    direction: higher_is_better
+    description: "Total realized revenue from completed sales orders."
+    remediation: "Investigate appointment volume, conversion funnel, and staffing levels."
   appointment_show_rate:
     min: 0.65
     severity: medium
+    unit: ratio
+    direction: higher_is_better
+    description: "Fraction of scheduled appointments where the customer showed up."
+    remediation: "Strengthen appointment reminders, confirm via SMS/email 24h prior, and review no-show patterns by day-of-week."
   appointment_to_order_conversion_rate:
     min: 0.25
     severity: medium
+    unit: ratio
+    direction: higher_is_better
+    description: "Fraction of showed appointments that resulted in a completed order."
+    remediation: "Review offer clarity, advisor training, and promotion-message alignment."
   refund_rate:
     max: 0.08
     severity: high
+    unit: ratio
+    direction: lower_is_better
+    description: "Fraction of POS invoices that are refunds."
+    remediation: "Audit refund reasons, tighten return policy enforcement, and check for process errors."
   pos_invoice_capture_rate:
     min: 0.85
     severity: medium
+    unit: ratio
+    direction: higher_is_better
+    description: "Ratio of POS invoices captured to completed sales orders."
+    remediation: "Check POS system uptime, train staff on checkout procedure, and audit missed captures."
   inventory_in_stock_rate:
     min: 0.90
     severity: high
+    unit: ratio
+    direction: higher_is_better
+    description: "Fraction of tracked SKUs currently in stock."
+    remediation: "Expedite replenishment orders, pause promotions on constrained SKUs, and review reorder points."
   stockout_sku_count:
     max: 3
     severity: high
+    unit: count
+    direction: lower_is_better
+    description: "Number of SKUs with zero available stock."
+    remediation: "Prioritize emergency replenishment, substitute with available alternatives, and notify affected customers."
   branded_revenue_mix_rate:
     min: 0.22
     severity: medium
+    unit: ratio
+    direction: higher_is_better
+    description: "Share of total revenue from branded / premium product lines."
+    remediation: "Deploy branded upsell scripts for advisors and feature branded products in store displays."
   average_work_order_cycle_time_minutes:
     max: 120
     severity: medium
+    unit: minutes
+    direction: lower_is_better
+    description: "Mean elapsed minutes from work order creation to completion."
+    remediation: "Prioritize overdue work orders, verify technician staffing, and identify bottleneck steps."
   overdue_work_order_count:
     max: 5
+    severity: high
+    unit: count
+    direction: lower_is_better
+    description: "Number of work orders past their expected completion date."
+    remediation: "Escalate to shift lead, redistribute workload, and communicate revised ETAs to customers."
     severity: high

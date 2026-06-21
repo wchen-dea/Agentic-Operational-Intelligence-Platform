@@ -11,11 +11,16 @@ from ai_layer.agents.promotion_agent import PromotionAgent
 from ai_layer.agents.recommendation_agent import RecommendationAgent
 from ai_layer.llm import reset_session_usage, get_session_cost_summary
 from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
+from ai_layer.context import HybridContextAssembler, SessionMemory, StreamingStateStore
 from ai_layer.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
 from ai_layer.orchestration.router import IntentRouter
 from ai_layer.orchestration.executor import DAGExecutor, ExecutionTrace
 
 logger = logging.getLogger(__name__)
+
+# Module-level singletons for session state (shared across orchestrator instances)
+_session_memory = SessionMemory(max_turns=20)
+_streaming_store = StreamingStateStore(ttl_seconds=300.0)
 
 
 class Orchestrator:
@@ -29,6 +34,14 @@ class Orchestrator:
         self.search = LocalHybridSearch(settings.rag_corpus_path)
         self.router = IntentRouter()
         self.executor = DAGExecutor(max_workers=4)
+
+        # Hybrid context assembler — merges streaming + retrieval + memory
+        self.context_assembler = HybridContextAssembler(
+            streaming_store=_streaming_store,
+            memory=_session_memory,
+            retriever=self.search,
+        )
+        self.session_memory = _session_memory
 
     # ------------------------------------------------------------------
     # DAG construction
@@ -143,11 +156,21 @@ class Orchestrator:
         store_id: str | None = None,
         region: str | None = None,
         persona: str = "store_manager",
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Route the question by intent, build the appropriate DAG subgraph, and execute."""
 
         # Reset per-request token tracking
         reset_session_usage()
+
+        # Phase 0: Assemble hybrid context (streaming + retrieval + memory)
+        context_window = self.context_assembler.assemble(
+            query=question,
+            session_id=session_id,
+            store_id=store_id,
+            top_k=3,
+            memory_turns=5,
+        )
 
         # Phase 1: Intent classification + routing
         route = self.router.classify(question)
@@ -164,6 +187,9 @@ class Orchestrator:
             "region": region,
             "persona": persona,
             "intent": route.intent.value,
+            "session_id": session_id,
+            "conversation_history": context_window.memory,
+            "streaming_state": context_window.streaming,
         }
         trace = self.executor.execute(dag, ctx)
 
@@ -181,12 +207,31 @@ class Orchestrator:
                 kpis, alerts, promotion, context_docs, persona=persona,
             )
 
+        # Phase 5: Record conversation turn for multi-turn memory
+        if session_id:
+            self.session_memory.add_turn(
+                session_id, role="user", content=question,
+                metadata={"store_id": store_id, "region": region, "persona": persona},
+            )
+            self.session_memory.add_turn(
+                session_id, role="assistant", content=answer_text or str(operational_brief),
+                metadata={"intent": route.intent.value},
+            )
+
+        # Inject streaming state for future requests on this store
+        if store_id and kpis:
+            _streaming_store.update(f"kpi:{store_id}", kpis)
+        if store_id and alerts:
+            _streaming_store.update(f"alerts:{store_id}", {"alerts": alerts})
+
         return {
             "question": question,
             "persona": persona,
             "intent": route.intent.value,
             "intent_confidence": route.confidence,
             "scope": {"store_id": store_id, "region": region},
+            "session_id": session_id,
+            "conversation_turns": len(context_window.memory),
             "kpis": kpis,
             "alerts": alerts,
             "retrieved_context": context_docs,

@@ -51,7 +51,8 @@ Implement a layered cost-efficiency strategy in `ai_layer/llm.py`, `ai_layer/age
 ## Consequences
 
 - **Cost reduction**: ~40–60% fewer input tokens (compact readout), ~50% fewer output tokens (reduced max_tokens), and 100% savings on cache-hit queries.
-- **Operational visibility**: teams can monitor per-request cost and identify expensive query patterns.
+- **Model routing**: the `ModelRouter` (`ai_layer/model_router.py`) further reduces costs by routing classification/extraction tasks to Haiku (~12x cheaper than Sonnet) and reserving Opus for complex reasoning.
+- **Operational visibility**: teams can monitor per-request cost at `GET /usage` and system-wide metrics at `GET /metrics` (Prometheus format).
 - **Cache trade-off**: cached responses may serve stale data when underlying KPIs change between calls. The `use_cache=False` escape hatch mitigates this.
 - **In-process cache only**: the LRU cache is not shared across workers or pods. A distributed cache (Redis) can be added later if hit rates justify it.
 - **Pricing assumptions**: cost estimates hard-code Claude Sonnet rates. If the model changes (see ADR-002), pricing constants in `LLMUsage` must be updated.

@@ -12,12 +12,36 @@ dependencies = [
     "pydantic-settings>=2.3.0",
     "pyyaml==6.0.1",
     "scikit-learn==1.5.0",
+    "chromadb>=1.5.9",
+    "sse-starlette>=3.0.3",
+    "mcp>=1.10.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest==8.2.2",
+    "pytest-cov>=5.0.0",
+    "pyright>=1.1.380",
+    "ruff>=0.5.0",
 ]
 
 [tool.uv]
 package = false
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = ["ai_layer", "services", "alerts", "data_platform", "config", "observability"]
+exclude = ["tests", ".venv", "**/__pycache__"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportUnusedVariable = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

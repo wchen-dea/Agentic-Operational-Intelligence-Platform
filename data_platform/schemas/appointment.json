@@ -1,4 +1,7 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Appointment Event",
+  "description": "A customer appointment lifecycle event from Aurora MySQL. Tracks bookings, show/no-show status, and completions.",
   "type": "object",
   "required": [
     "event_id",
@@ -9,19 +12,39 @@
   ],
   "properties": {
     "event_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for this event (UUID)."
     },
     "store_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Store location identifier."
     },
     "appointment_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for the appointment."
     },
     "event_ts": {
-      "type": "string"
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when this event occurred."
     },
     "status": {
-      "type": "string"
+      "type": "string",
+      "enum": ["scheduled", "confirmed", "showed", "no_show", "completed", "cancelled"],
+      "description": "Current lifecycle status of the appointment."
+    },
+    "customer_id": {
+      "type": "string",
+      "description": "Anonymized customer identifier."
+    },
+    "advisor_id": {
+      "type": "string",
+      "description": "Staff member assigned to the appointment."
+    },
+    "appointment_type": {
+      "type": "string",
+      "enum": ["walk_in", "online_booking", "phone", "referral"],
+      "description": "Channel through which the appointment was created."
     }
   }
 }

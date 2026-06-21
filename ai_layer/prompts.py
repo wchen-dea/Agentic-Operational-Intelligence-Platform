@@ -124,7 +124,17 @@ PROMOTION_STRATEGY = PromptTemplate(
 
 
 class PromptRegistry:
-    """Manages prompt templates with versioning, lifecycle, and A/B variant selection."""
+    """Manages prompt templates with versioning, lifecycle, and A/B variant selection.
+
+    Full runtime API:
+    - ``register(name, template)`` — add a prompt
+    - ``get(name, version, variant)`` — retrieve by name (latest active if no version)
+    - ``deprecate(name, version, variant)`` — mark a version deprecated
+    - ``retire(name, version, variant)`` — mark a version retired (hidden from ``get()``)
+    - ``list_prompts(**filters)`` — list with optional lifecycle/variant filters
+    - ``names()`` — unique prompt names
+    - ``versions(name)`` — versions available for a prompt
+    """
 
     def __init__(self) -> None:
         # key: (name, version, variant)
@@ -158,25 +168,55 @@ class PromptRegistry:
         candidates.sort(key=lambda x: _version_tuple(x[0][1]), reverse=True)
         return candidates[0][1]
 
-    def list_prompts(self) -> list[dict[str, str]]:
-        """List all registered prompts with metadata."""
-        return [
-            {"name": k[0], "version": k[1], "variant": k[2], "lifecycle": t.lifecycle.value}
-            for k, t in sorted(self._store.items())
-        ]
+    def list_prompts(
+        self,
+        lifecycle: PromptLifecycle | None = None,
+        variant: str | None = None,
+    ) -> list[dict[str, str]]:
+        """List registered prompts with optional lifecycle/variant filters."""
+        results = []
+        for k, t in sorted(self._store.items()):
+            if lifecycle is not None and t.lifecycle != lifecycle:
+                continue
+            if variant is not None and k[2] != variant:
+                continue
+            results.append({
+                "name": k[0], "version": k[1], "variant": k[2], "lifecycle": t.lifecycle.value,
+            })
+        return results
+
+    def names(self) -> list[str]:
+        """Return unique prompt names."""
+        return sorted({k[0] for k in self._store})
+
+    def versions(self, name: str) -> list[str]:
+        """Return all versions registered for a prompt name."""
+        return sorted(
+            {k[1] for k in self._store if k[0] == name},
+            key=_version_tuple,
+            reverse=True,
+        )
 
     def deprecate(self, name: str, version: str, variant: str = "default") -> None:
         """Mark a prompt version as deprecated."""
+        self._set_lifecycle(name, version, variant, PromptLifecycle.DEPRECATED)
+
+    def retire(self, name: str, version: str, variant: str = "default") -> None:
+        """Mark a prompt version as retired (excluded from ``get()`` lookup)."""
+        self._set_lifecycle(name, version, variant, PromptLifecycle.RETIRED)
+
+    def _set_lifecycle(
+        self, name: str, version: str, variant: str, lifecycle: PromptLifecycle,
+    ) -> None:
         key = (name, version, variant)
         if key not in self._store:
             raise KeyError(f"Prompt '{name}' v{version} variant='{variant}' not found.")
         old = self._store[key]
-        # Rebuild frozen dataclass with new lifecycle
         self._store[key] = PromptTemplate(
             system=old.system,
             user=old.user,
             version=old.version,
-            lifecycle=PromptLifecycle.DEPRECATED,
+            lifecycle=lifecycle,
             variant=old.variant,
             metadata=old.metadata,
         )

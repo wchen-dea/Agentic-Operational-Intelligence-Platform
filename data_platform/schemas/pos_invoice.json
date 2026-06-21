@@ -1,4 +1,7 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "POS Invoice Event",
+  "description": "A point-of-sale invoice event from Aurora MySQL. Tracks checkout transactions and refunds.",
   "type": "object",
   "required": [
     "event_id",
@@ -9,22 +12,45 @@
   ],
   "properties": {
     "event_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for this event (UUID)."
     },
     "store_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Store location identifier."
     },
     "invoice_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Unique identifier for the POS invoice."
     },
     "event_ts": {
-      "type": "string"
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when this event occurred."
     },
     "invoice_amount": {
-      "type": "number"
+      "type": "number",
+      "minimum": 0,
+      "description": "Dollar amount of the invoice."
     },
     "refund_flag": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false,
+      "description": "True if this invoice represents a refund transaction."
+    },
+    "order_id": {
+      "type": ["string", "null"],
+      "description": "Linked sales order ID for capture-rate tracking."
+    },
+    "brand_tier": {
+      "type": "string",
+      "enum": ["branded", "private_label", "generic"],
+      "description": "Product brand tier for revenue-mix analysis."
+    },
+    "tender_type": {
+      "type": "string",
+      "enum": ["cash", "credit", "debit", "financing", "other"],
+      "description": "Payment method used."
     }
   }
 }

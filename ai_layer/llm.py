@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import time
@@ -109,6 +110,14 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+@lru_cache(maxsize=1)
+def _get_async_client() -> anthropic.AsyncAnthropic:
+    api_key = os.environ.get(settings.llm.api_key_env_var)
+    if not api_key:
+        raise ValueError(f"Missing environment variable: {settings.llm.api_key_env_var}")
+    return anthropic.AsyncAnthropic(api_key=api_key)
+
+
 def _extract_text(response: Any) -> str:
     """Safely extract text from an Anthropic response, handling multi-block content."""
     blocks = getattr(response, "content", None)
@@ -203,4 +212,322 @@ def generate(
     except anthropic.APIStatusError as exc:
         logger.error("LLM API error (status=%d): %s", exc.status_code, exc.message)
         raise
+
+
+# ---------------------------------------------------------------------------
+# Multimodal (vision) generation
+# ---------------------------------------------------------------------------
+
+_SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def generate_with_image(
+    prompt: str,
+    image_data: str | bytes,
+    media_type: str = "image/png",
+    system: str | None = None,
+    max_tokens: int | None = None,
+) -> str:
+    """Generate text from a prompt + image using Claude's vision capability.
+
+    Args:
+        prompt: User text prompt describing the analysis to perform.
+        image_data: Base64-encoded image string, or raw bytes (will be b64-encoded).
+        media_type: MIME type of the image. Must be png, jpeg, gif, or webp.
+        system: Optional system prompt.
+        max_tokens: Override the default max_tokens from settings.
+
+    Returns:
+        Generated text response from the LLM.
+
+    Example::
+
+        import base64
+        with open("dashboard.png", "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+        analysis = generate_with_image(
+            "Identify any anomalies in this KPI dashboard chart.",
+            image_data=img_b64,
+            media_type="image/png",
+        )
+    """
+    import base64
+
+    if media_type not in _SUPPORTED_IMAGE_TYPES:
+        raise ValueError(f"Unsupported image type '{media_type}'. Supported: {_SUPPORTED_IMAGE_TYPES}")
+
+    # Accept raw bytes or base64 string
+    if isinstance(image_data, bytes):
+        image_b64 = base64.b64encode(image_data).decode("ascii")
+    else:
+        image_b64 = image_data
+
+    effective_max_tokens = max_tokens or settings.llm.max_tokens
+    client = _get_client()
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": image_b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        }
+    ]
+
+    kwargs: dict[str, Any] = {
+        "model": settings.llm.model,
+        "max_tokens": effective_max_tokens,
+        "temperature": settings.llm.temperature,
+        "messages": messages,
+    }
+    if system:
+        kwargs["system"] = system
+
+    start = time.perf_counter()
+    try:
+        response = client.messages.create(**kwargs)
+        duration = (time.perf_counter() - start) * 1000
+        text = _extract_text(response)
+        if not text:
+            raise RuntimeError("LLM vision response contained no text content.")
+
+        input_tokens, output_tokens = _extract_usage(response)
+        usage = LLMUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_hit=False,
+            duration_ms=duration,
+        )
+        _session_usage.append(usage)
+
+        logger.info(
+            "LLM vision call: %d input + %d output tokens (%.1fms, ~$%.6f)",
+            input_tokens, output_tokens, duration, usage.estimated_cost_usd,
+        )
+        return text
+    except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
+        logger.error("LLM vision error: %s", exc)
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Tool / function-calling generation
+# ---------------------------------------------------------------------------
+
+def generate_with_tools(
+    prompt: str,
+    tools: list[dict[str, Any]],
+    tool_executor: Any = None,
+    system: str | None = None,
+    max_tokens: int | None = None,
+    max_tool_rounds: int = 5,
+) -> dict[str, Any]:
+    """Generate a response that may include tool-use calls.
+
+    The LLM receives ``tools`` as Anthropic tool definitions.  If the model
+    requests a tool call, ``tool_executor(name, input)`` is invoked and the
+    result is sent back in a multi-turn loop (up to *max_tool_rounds* rounds).
+
+    Returns a dict with ``text`` (final answer), ``tool_calls`` (list of
+    calls made), and ``usage`` (LLMUsage).
+    """
+    effective_max_tokens = max_tokens or settings.llm.max_tokens
+
+    client = _get_client()
+    messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+
+    kwargs: dict[str, Any] = {
+        "model": settings.llm.model,
+        "max_tokens": effective_max_tokens,
+        "temperature": settings.llm.temperature,
+        "tools": tools,
+    }
+    if system:
+        kwargs["system"] = system
+
+    tool_calls_log: list[dict[str, Any]] = []
+    total_input = 0
+    total_output = 0
+    start = time.perf_counter()
+
+    for _round in range(max_tool_rounds):
+        kwargs["messages"] = messages
+        try:
+            response = client.messages.create(**kwargs)
+        except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
+            logger.error("LLM tool-calling error: %s", exc)
+            raise
+
+        inp, out = _extract_usage(response)
+        total_input += inp
+        total_output += out
+
+        # Process content blocks
+        assistant_content = response.content
+        messages.append({"role": "assistant", "content": assistant_content})
+
+        # Check if the model wants to use tools
+        if response.stop_reason != "tool_use":
+            # Final text response
+            text = _extract_text(response)
+            break
+
+        # Execute each tool call
+        tool_results: list[dict[str, Any]] = []
+        for block in assistant_content:
+            if block.type != "tool_use":
+                continue
+            tool_name = block.name
+            tool_input = block.input
+            tool_calls_log.append({"name": tool_name, "input": tool_input})
+
+            if tool_executor is not None:
+                try:
+                    result = tool_executor(tool_name, tool_input)
+                except Exception as exc:
+                    logger.warning("Tool %s failed: %s", tool_name, exc)
+                    result = {"error": str(exc)}
+            else:
+                result = {"error": f"No executor for tool '{tool_name}'"}
+
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": json.dumps(result) if not isinstance(result, str) else result,
+            })
+
+        messages.append({"role": "user", "content": tool_results})
+    else:
+        # Exhausted max rounds
+        text = _extract_text(response)  # type: ignore[possibly-undefined]
+        logger.warning("Tool-calling loop exhausted after %d rounds", max_tool_rounds)
+
+    duration = (time.perf_counter() - start) * 1000
+    usage = LLMUsage(
+        input_tokens=total_input,
+        output_tokens=total_output,
+        cache_hit=False,
+        duration_ms=duration,
+    )
+    _session_usage.append(usage)
+
+    logger.info(
+        "LLM tool-calling: %d rounds, %d tool calls, %d+%d tokens (%.1fms)",
+        len(tool_calls_log), len(tool_calls_log), total_input, total_output, duration,
+    )
+
+    return {
+        "text": text,  # type: ignore[possibly-undefined]
+        "tool_calls": tool_calls_log,
+        "usage": usage,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Async streaming generation
+# ---------------------------------------------------------------------------
+
+async def generate_stream(
+    prompt: str,
+    system: str | None = None,
+    max_tokens: int | None = None,
+):
+    """Async generator that yields text chunks as they arrive from the LLM.
+
+    Usage::
+
+        async for chunk in generate_stream("Summarize KPIs"):
+            print(chunk, end="")
+    """
+    effective_max_tokens = max_tokens or settings.llm.max_tokens
+    client = _get_async_client()
+
+    kwargs: dict[str, Any] = {
+        "model": settings.llm.model,
+        "max_tokens": effective_max_tokens,
+        "temperature": settings.llm.temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        kwargs["system"] = system
+
+    start = time.perf_counter()
+    total_output = 0
+
+    try:
+        async with client.messages.stream(**kwargs) as stream:
+            async for text in stream.text_stream:
+                total_output += len(text.split())  # rough token proxy
+                yield text
+
+        # Record usage after stream completes
+        duration = (time.perf_counter() - start) * 1000
+        final = await stream.get_final_message()
+        inp, out = _extract_usage(final)
+        usage = LLMUsage(
+            input_tokens=inp,
+            output_tokens=out,
+            cache_hit=False,
+            duration_ms=duration,
+        )
+        _session_usage.append(usage)
+        logger.info(
+            "LLM stream: %d input + %d output tokens (%.1fms)",
+            inp, out, duration,
+        )
+    except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
+        logger.error("LLM stream error: %s", exc)
+        raise
+
+
+async def generate_async(
+    prompt: str,
+    system: str | None = None,
+    max_tokens: int | None = None,
+) -> str:
+    """Async (non-streaming) LLM generation using the AsyncAnthropic client."""
+    effective_max_tokens = max_tokens or settings.llm.max_tokens
+    client = _get_async_client()
+
+    kwargs: dict[str, Any] = {
+        "model": settings.llm.model,
+        "max_tokens": effective_max_tokens,
+        "temperature": settings.llm.temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        kwargs["system"] = system
+
+    start = time.perf_counter()
+    try:
+        response = await client.messages.create(**kwargs)
+        duration = (time.perf_counter() - start) * 1000
+        text = _extract_text(response)
+        if not text:
+            raise RuntimeError("LLM async response contained no text content.")
+
+        inp, out = _extract_usage(response)
+        usage = LLMUsage(
+            input_tokens=inp, output_tokens=out,
+            cache_hit=False, duration_ms=duration,
+        )
+        _session_usage.append(usage)
+        logger.info(
+            "LLM async: %d input + %d output tokens (%.1fms, ~$%.6f)",
+            inp, out, duration, usage.estimated_cost_usd,
+        )
+        return text
+    except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
+        logger.error("LLM async error: %s", exc)
         raise

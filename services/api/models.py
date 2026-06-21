@@ -8,6 +8,7 @@ class AskRequest(BaseModel):
     store_id: str | None = None
     region: str | None = None
     persona: Literal["store_manager", "executive"] = "store_manager"
+    session_id: str | None = None
 
 
 class KPIRequest(BaseModel):

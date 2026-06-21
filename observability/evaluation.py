@@ -9,10 +9,13 @@ Provides:
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 from typing import Any, Callable
 
 
@@ -114,7 +117,7 @@ class EvalCriteria(str, Enum):
 class LLMEvaluator:
     """Evaluates LLM outputs against quality criteria.
 
-    Supports both rule-based heuristics and (future) LLM-as-judge evaluation.
+    Supports both rule-based heuristics and LLM-as-judge evaluation.
     """
 
     def __init__(self) -> None:
@@ -122,6 +125,8 @@ class LLMEvaluator:
             EvalCriteria.GROUNDEDNESS: self._eval_groundedness,
             EvalCriteria.ACTIONABILITY: self._eval_actionability,
             EvalCriteria.CONCISENESS: self._eval_conciseness,
+            EvalCriteria.RELEVANCE: self._eval_relevance,
+            EvalCriteria.PERSONA_FIT: self._eval_persona_fit,
         }
 
     def evaluate(
@@ -179,6 +184,138 @@ class LLMEvaluator:
             criteria=EvalCriteria.CONCISENESS,
             details=f"Output is {word_count} words.",
         )
+
+    def _eval_relevance(self, output: str, context: dict[str, Any]) -> EvalResult:
+        """Check that output addresses the user's question/intent."""
+        question = context.get("question", "")
+        intent = context.get("intent", "")
+        if not question:
+            return EvalResult(score=0.5, passed=True, criteria=EvalCriteria.RELEVANCE, details="No question to evaluate against.")
+
+        # Check keyword overlap between question and output
+        q_words = set(question.lower().split()) - {"the", "a", "an", "is", "are", "what", "why", "how", "for", "and", "or", "to", "in", "of"}
+        out_lower = output.lower()
+        matched = sum(1 for w in q_words if w in out_lower)
+        coverage = matched / max(len(q_words), 1)
+
+        # Bonus for intent alignment
+        intent_keywords = {
+            "kpi_query": ["kpi", "metric", "revenue", "rate", "count"],
+            "anomaly_check": ["alert", "anomal", "threshold", "breach", "warning"],
+            "operational_brief": ["brief", "action", "priority", "recommend"],
+            "promotion_analysis": ["promotion", "campaign", "branded", "mix"],
+        }
+        intent_bonus = 0.0
+        for kw in intent_keywords.get(intent, []):
+            if kw in out_lower:
+                intent_bonus += 0.1
+        intent_bonus = min(intent_bonus, 0.3)
+
+        score = min(coverage + intent_bonus, 1.0)
+        return EvalResult(
+            score=score,
+            passed=score >= 0.3,
+            criteria=EvalCriteria.RELEVANCE,
+            details=f"Question keyword coverage: {coverage:.0%}, intent bonus: {intent_bonus:.0%}.",
+        )
+
+    def _eval_persona_fit(self, output: str, context: dict[str, Any]) -> EvalResult:
+        """Check that output tone and content match the target persona."""
+        persona = context.get("persona", "store_manager")
+        out_lower = output.lower()
+
+        if persona == "executive":
+            exec_markers = [
+                "region", "strategic", "portfolio", "variance", "budget",
+                "cross-store", "intervention", "reallocate", "roi",
+            ]
+            found = sum(1 for m in exec_markers if m in out_lower)
+            score = min(found / 3.0, 1.0)
+            details = f"Executive markers found: {found}/{len(exec_markers)}."
+        else:
+            ops_markers = [
+                "store", "daily", "huddle", "team", "advisor", "coaching",
+                "shift", "staffing", "checkout", "sku",
+            ]
+            found = sum(1 for m in ops_markers if m in out_lower)
+            score = min(found / 3.0, 1.0)
+            details = f"Store manager markers found: {found}/{len(ops_markers)}."
+
+        return EvalResult(
+            score=score,
+            passed=score >= 0.3,
+            criteria=EvalCriteria.PERSONA_FIT,
+            details=details,
+        )
+
+    def evaluate_with_llm(
+        self,
+        output: str,
+        context: dict[str, Any],
+        criteria: list[EvalCriteria] | None = None,
+    ) -> list[EvalResult]:
+        """Evaluate using an LLM as judge (requires API key).
+
+        Falls back to rule-based evaluation if LLM is unavailable.
+        """
+        import os
+        from config.settings import settings
+
+        if not os.environ.get(settings.llm.api_key_env_var):
+            return self.evaluate(output, context, criteria)
+
+        criteria = criteria or [EvalCriteria.GROUNDEDNESS, EvalCriteria.RELEVANCE, EvalCriteria.PERSONA_FIT]
+        results: list[EvalResult] = []
+
+        try:
+            from ai_layer.llm import generate as llm_generate
+
+            question = context.get("question", "N/A")
+            persona = context.get("persona", "store_manager")
+            kpi_names = ", ".join(context.get("kpis", {}).keys()) or "N/A"
+
+            prompt = (
+                f"Evaluate the following AI assistant response on a scale of 0.0 to 1.0 for each criterion.\n\n"
+                f"USER QUESTION: {question}\n"
+                f"TARGET PERSONA: {persona}\n"
+                f"AVAILABLE KPIs: {kpi_names}\n\n"
+                f"RESPONSE TO EVALUATE:\n{output[:1000]}\n\n"
+                f"Score each criterion (0.0-1.0) and explain briefly:\n"
+            )
+            for c in criteria:
+                prompt += f"- {c.value}: \n"
+            prompt += "\nRespond in format: CRITERION: SCORE | EXPLANATION"
+
+            llm_output = llm_generate(prompt, max_tokens=256)
+
+            # Parse scores from LLM response
+            for c in criteria:
+                score = 0.5  # default
+                details = ""
+                for line in llm_output.split("\n"):
+                    if c.value.lower() in line.lower():
+                        parts = line.split("|")
+                        try:
+                            score_part = parts[0].split(":")[-1].strip()
+                            score = float(score_part)
+                            score = max(0.0, min(1.0, score))
+                        except (ValueError, IndexError):
+                            pass
+                        details = parts[1].strip() if len(parts) > 1 else ""
+                        break
+
+                results.append(EvalResult(
+                    score=score,
+                    passed=score >= 0.5,
+                    criteria=c,
+                    details=f"[LLM-judge] {details}",
+                ))
+
+        except Exception as exc:
+            logger.warning("LLM-as-judge failed, falling back to rules: %s", exc)
+            return self.evaluate(output, context, criteria)
+
+        return results
 
 
 # ---------------------------------------------------------------------------
@@ -241,3 +378,8 @@ class AgentPerformanceTracker:
 metrics = MetricsCollector()
 evaluator = LLMEvaluator()
 tracker = AgentPerformanceTracker(metrics)
+
+
+def get_metrics_collector() -> MetricsCollector:
+    """Return the global metrics collector singleton."""
+    return metrics

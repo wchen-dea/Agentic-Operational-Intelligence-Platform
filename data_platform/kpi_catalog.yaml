@@ -1,0 +1,146 @@
+# Machine-readable KPI catalog.
+# Each entry defines the metric semantics so agents and LLMs can reason
+# about values without hallucinating definitions.
+
+kpis:
+# ── Sales domain ──────────────────────────────────────────────────
+- name: revenue_total
+  domain: sales_order
+  description: "Total realized revenue from completed / fulfilled / paid sales orders within the measurement window."
+  formula: "SUM(order_amount) WHERE status IN (completed, fulfilled, paid)"
+  unit: USD
+  direction: higher_is_better
+  threshold_min: 1000
+  threshold_max: null
+  source_table: sales_orders
+- name: order_count
+  domain: sales_order
+  description: "Count of completed sales orders within the measurement window."
+  formula: "COUNT(*) WHERE status IN (completed, fulfilled, paid)"
+  unit: count
+  direction: higher_is_better
+  threshold_min: null
+  threshold_max: null
+  source_table: sales_orders
+- name: average_order_value
+  domain: sales_order
+  description: "Average dollar value per completed sales order."
+  formula: "revenue_total / order_count"
+  unit: USD
+  direction: higher_is_better
+  threshold_min: null
+  threshold_max: null
+  source_table: sales_orders
+# ── Appointment domain ────────────────────────────────────────────
+- name: appointment_show_rate
+  domain: appointment
+  description: "Fraction of scheduled appointments where the customer showed up or completed the visit."
+  formula: "appointment_show_count / appointment_count"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: 0.65
+  threshold_max: null
+  source_table: appointments
+- name: appointment_to_order_conversion_rate
+  domain: appointment
+  description: "Fraction of appointments that resulted in a completed sales order."
+  formula: "order_count / appointment_count"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: 0.25
+  threshold_max: null
+  source_table: appointments
+# ── POS / Invoice domain ─────────────────────────────────────────
+- name: invoice_total
+  domain: pos_invoice
+  description: "Total dollar value of POS invoices captured during the measurement window."
+  formula: "SUM(invoice_amount)"
+  unit: USD
+  direction: higher_is_better
+  threshold_min: null
+  threshold_max: null
+  source_table: pos_invoices
+- name: pos_invoice_capture_rate
+  domain: pos_invoice
+  description: "Ratio of POS invoices to sales orders — measures point-of-sale capture completeness."
+  formula: "invoice_count / order_count"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: 0.85
+  threshold_max: null
+  source_table: pos_invoices
+- name: refund_rate
+  domain: pos_invoice
+  description: "Fraction of POS invoices flagged as refunds."
+  formula: "refund_count / invoice_count"
+  unit: ratio
+  direction: lower_is_better
+  threshold_min: null
+  threshold_max: 0.08
+  source_table: pos_invoices
+# ── Inventory domain ──────────────────────────────────────────────
+- name: inventory_in_stock_rate
+  domain: inventory
+  description: "Fraction of tracked SKUs that are currently in stock."
+  formula: "in_stock_sku_count / inventory_sku_count"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: 0.90
+  threshold_max: null
+  source_table: inventory_snapshots
+- name: low_stock_sku_count
+  domain: inventory
+  description: "Number of SKUs with stock below the reorder threshold."
+  formula: "COUNT(*) WHERE stock_qty < reorder_point"
+  unit: count
+  direction: lower_is_better
+  threshold_min: null
+  threshold_max: null
+  source_table: inventory_snapshots
+- name: stockout_sku_count
+  domain: inventory
+  description: "Number of SKUs with zero available stock."
+  formula: "COUNT(*) WHERE stock_qty = 0"
+  unit: count
+  direction: lower_is_better
+  threshold_min: null
+  threshold_max: 3
+  source_table: inventory_snapshots
+- name: inventory_turnover_proxy
+  domain: inventory
+  description: "Proxy for inventory turnover calculated as orders per tracked SKU within the window."
+  formula: "order_count / inventory_sku_count"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: null
+  threshold_max: null
+  source_table: inventory_snapshots
+# ── Work Order domain ─────────────────────────────────────────────
+- name: average_work_order_cycle_time_minutes
+  domain: work_order
+  description: "Mean elapsed time in minutes from work order creation to completion."
+  formula: "SUM(cycle_time_minutes) / work_order_count"
+  unit: minutes
+  direction: lower_is_better
+  threshold_min: null
+  threshold_max: 120
+  source_table: work_orders
+- name: overdue_work_order_count
+  domain: work_order
+  description: "Number of work orders past their expected completion date."
+  formula: "COUNT(*) WHERE status = overdue"
+  unit: count
+  direction: lower_is_better
+  threshold_min: null
+  threshold_max: 5
+  source_table: work_orders
+# ── Promotion domain ──────────────────────────────────────────────
+- name: branded_revenue_mix_rate
+  domain: promotion
+  description: "Share of total revenue (orders + invoices) from branded / premium product lines."
+  formula: "(branded_order_revenue + branded_invoice_total) / (revenue_total + invoice_total)"
+  unit: ratio
+  direction: higher_is_better
+  threshold_min: 0.22
+  threshold_max: null
+  source_table: sales_orders

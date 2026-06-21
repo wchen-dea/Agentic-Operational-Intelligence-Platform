@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Inventory Snapshot Event",
+  "description": "A periodic inventory snapshot from Aurora MySQL. Captures SKU-level stock status for a store at a point in time.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "store_id",
+    "event_ts",
+    "sku_count",
+    "in_stock_sku_count"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique identifier for this snapshot event (UUID)."
+    },
+    "store_id": {
+      "type": "string",
+      "description": "Store location identifier."
+    },
+    "event_ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when this snapshot was captured."
+    },
+    "sku_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of tracked SKUs in the store."
+    },
+    "in_stock_sku_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of SKUs with available stock greater than zero."
+    },
+    "low_stock_sku_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of SKUs with stock below the reorder threshold."
+    },
+    "stockout_sku_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of SKUs with zero available stock."
+    },
+    "total_units_on_hand": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Aggregate units across all SKUs."
+    },
+    "snapshot_type": {
+      "type": "string",
+      "enum": ["daily", "intraday", "cycle_count"],
+      "description": "How this snapshot was triggered."
+    }
+  }
+}
