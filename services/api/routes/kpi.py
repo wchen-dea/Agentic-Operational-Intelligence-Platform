@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from services.api.models import KPIRequest
 from ai_layer.agents.tools.fetch_kpi_tool import fetch_store_kpis
 
-router = APIRouter()
+router = APIRouter(tags=["kpi"])
 
 
 @router.post("/kpi")

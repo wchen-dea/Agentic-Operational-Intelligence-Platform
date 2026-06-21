@@ -5,6 +5,9 @@ thresholds:
   appointment_show_rate:
     min: 0.65
     severity: medium
+  appointment_to_order_conversion_rate:
+    min: 0.25
+    severity: medium
   refund_rate:
     max: 0.08
     severity: high

@@ -1,8 +1,8 @@
-from ai_layer.agents.orchestrator import AgenticOperationalIntelligenceOrchestrator
+from ai_layer.agents.orchestrator import get_orchestrator
 
 
 def build_daily_summary(region: str = "Phoenix") -> str:
-    orchestrator = AgenticOperationalIntelligenceOrchestrator()
+    orchestrator = get_orchestrator()
     result = orchestrator.answer(
         question="Summarize operational KPI performance and promotion recommendations for executives.",
         region=region,

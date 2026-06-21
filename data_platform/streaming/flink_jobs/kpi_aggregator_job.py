@@ -6,12 +6,12 @@ This is framework-neutral sample logic. In production, wire this into:
 - Databricks Structured Streaming
 - Spark/Flink SQL jobs
 """
-from __future__ import annotations
+
 from collections import defaultdict
-from typing import Iterable, Dict, Any
+from typing import Any, Iterable
 
 
-def aggregate_kpis(events: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def aggregate_kpis(events: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Aggregate basic KPIs by store_id from mixed retail events."""
     state = defaultdict(lambda: {
         "revenue_total": 0.0,

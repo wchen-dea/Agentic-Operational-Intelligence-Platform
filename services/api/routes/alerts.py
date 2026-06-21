@@ -3,7 +3,7 @@ from config.settings import settings
 from ai_layer.agents.tools.fetch_kpi_tool import fetch_store_kpis
 from ai_layer.agents.tools.alert_tool import detect_kpi_alerts_for_store
 
-router = APIRouter()
+router = APIRouter(tags=["alerts"])
 
 
 @router.get("/alerts/{store_id}")

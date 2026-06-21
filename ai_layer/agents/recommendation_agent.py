@@ -1,36 +1,42 @@
-from __future__ import annotations
-from typing import Dict, Any, List
+import logging
+import os
+from typing import Any
+
+from ai_layer.llm import generate as llm_generate
+from alerts.threshold_config import threshold_min, threshold_max
+
+logger = logging.getLogger(__name__)
 
 
 class RecommendationAgent:
-    def _diagnose_signals(self, kpis: Dict[str, Any], promo: Dict[str, Any]) -> List[Dict[str, str]]:
-        issues: List[Dict[str, str]] = []
+    def _diagnose_signals(self, kpis: dict[str, Any], promo: dict[str, Any]) -> list[dict[str, str]]:
+        issues: list[dict[str, str]] = []
 
-        if kpis.get("revenue_total", float("inf")) < 1000:
+        if kpis.get("revenue_total", float("inf")) < threshold_min("revenue_total", 1000):
             issues.append({
                 "domain": "sales_order",
                 "signal": "Low realized sales volume",
                 "impact": "Under-performing store risk and lower daily contribution.",
             })
-        if kpis.get("appointment_to_order_conversion_rate", 1.0) < 0.25:
+        if kpis.get("appointment_to_order_conversion_rate", 1.0) < threshold_min("appointment_to_order_conversion_rate", 0.25):
             issues.append({
                 "domain": "appointment",
                 "signal": "Low appointment-to-order conversion",
                 "impact": "Weak conversion funnel and reduced promotion ROI.",
             })
-        if kpis.get("pos_invoice_capture_rate", 1.0) < 0.85:
+        if kpis.get("pos_invoice_capture_rate", 1.0) < threshold_min("pos_invoice_capture_rate", 0.85):
             issues.append({
                 "domain": "pos_invoice",
                 "signal": "Low POS invoice capture",
                 "impact": "Revenue realization leakage and unreliable downstream KPI analytics.",
             })
-        if kpis.get("inventory_in_stock_rate", 1.0) < 0.90 or kpis.get("stockout_sku_count", 0) > 3:
+        if kpis.get("inventory_in_stock_rate", 1.0) < threshold_min("inventory_in_stock_rate", 0.90) or kpis.get("stockout_sku_count", 0) > threshold_max("stockout_sku_count", 3):
             issues.append({
                 "domain": "inventory",
                 "signal": "Inventory availability pressure",
                 "impact": "Lost upsell opportunities and customer dissatisfaction due to stockouts.",
             })
-        if kpis.get("average_work_order_cycle_time_minutes", 0.0) > 120:
+        if kpis.get("average_work_order_cycle_time_minutes", 0.0) > threshold_max("average_work_order_cycle_time_minutes", 120):
             issues.append({
                 "domain": "work_order",
                 "signal": "Long work-order cycle time",
@@ -46,15 +52,15 @@ class RecommendationAgent:
 
     def build_operational_brief(
         self,
-        kpis: Dict[str, Any],
-        alerts: List[Dict[str, Any]],
-        promo: Dict[str, Any],
-        context_docs: List[Dict[str, Any]],
+        kpis: dict[str, Any],
+        alerts: list[dict[str, Any]],
+        promo: dict[str, Any],
+        context_docs: list[dict[str, Any]],
         persona: str = "store_manager",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         issues = self._diagnose_signals(kpis, promo)
 
-        priority_actions: List[Dict[str, str]] = []
+        priority_actions: list[dict[str, str]] = []
         if persona == "executive":
             priority_actions.append({
                 "action": "Rank under-performing stores by revenue, conversion, and stockout pressure for intervention within 24 hours.",
@@ -123,10 +129,10 @@ class RecommendationAgent:
 
     def run(
         self,
-        kpis: Dict[str, Any],
-        alerts: List[Dict[str, Any]],
-        promo: Dict[str, Any],
-        context_docs: List[Dict[str, Any]],
+        kpis: dict[str, Any],
+        alerts: list[dict[str, Any]],
+        promo: dict[str, Any],
+        context_docs: list[dict[str, Any]],
         persona: str = "store_manager",
     ) -> str:
         store_or_region = kpis.get("store_id") or kpis.get("region") or "selected scope"
@@ -171,4 +177,23 @@ class RecommendationAgent:
         for doc in context_docs:
             lines.append(f"- {doc['title']}: {doc['text']}")
 
-        return "\n".join(lines)
+        structured_readout = "\n".join(lines)
+
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            system_prompt = (
+                "You are an AI operations advisor for retail store managers and executives. "
+                "Given a structured operational readout with KPIs, alerts, and recommended actions, "
+                "produce a concise, actionable narrative summary. "
+                "Prioritize clarity and specificity. Use bullet points for actions."
+            )
+            user_prompt = (
+                f"Persona: {persona}\n\n"
+                f"Structured readout:\n{structured_readout}\n\n"
+                "Generate a concise operational intelligence brief with prioritized actions."
+            )
+            try:
+                return llm_generate(user_prompt, system=system_prompt)
+            except Exception as e:
+                logger.warning("LLM generation failed, falling back to structured readout: %s", e)
+
+        return structured_readout

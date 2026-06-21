@@ -1,16 +1,17 @@
-from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Any
+
+from alerts.threshold_config import threshold_min, threshold_max
 
 
 class PromotionAgent:
-    def run(self, question: str, kpis: Dict[str, Any], context_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
-        low_conversion = kpis.get("appointment_to_order_conversion_rate", 1.0) < 0.25
-        low_show_rate = kpis.get("appointment_show_rate", 1.0) < 0.65
-        high_cycle_time = kpis.get("average_work_order_cycle_time_minutes", 0.0) > 120
-        low_branded_mix = kpis.get("branded_revenue_mix_rate", 1.0) < 0.22
-        low_invoice_capture = kpis.get("pos_invoice_capture_rate", 1.0) < 0.85
-        low_in_stock = kpis.get("inventory_in_stock_rate", 1.0) < 0.90
-        high_stockouts = kpis.get("stockout_sku_count", 0) > 3
+    def run(self, kpis: dict[str, Any], context_docs: list[dict[str, Any]]) -> dict[str, Any]:
+        low_conversion = kpis.get("appointment_to_order_conversion_rate", 1.0) < threshold_min("appointment_to_order_conversion_rate", 0.25)
+        low_show_rate = kpis.get("appointment_show_rate", 1.0) < threshold_min("appointment_show_rate", 0.65)
+        high_cycle_time = kpis.get("average_work_order_cycle_time_minutes", 0.0) > threshold_max("average_work_order_cycle_time_minutes", 120)
+        low_branded_mix = kpis.get("branded_revenue_mix_rate", 1.0) < threshold_min("branded_revenue_mix_rate", 0.22)
+        low_invoice_capture = kpis.get("pos_invoice_capture_rate", 1.0) < threshold_min("pos_invoice_capture_rate", 0.85)
+        low_in_stock = kpis.get("inventory_in_stock_rate", 1.0) < threshold_min("inventory_in_stock_rate", 0.90)
+        high_stockouts = kpis.get("stockout_sku_count", 0) > threshold_max("stockout_sku_count", 3)
 
         recommendations = []
         if low_show_rate:

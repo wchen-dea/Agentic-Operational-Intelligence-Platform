@@ -1,5 +1,6 @@
-from __future__ import annotations
-from typing import Dict, Any
+from functools import lru_cache
+from typing import Any
+
 from config.settings import settings
 from ai_layer.agents.kpi_agent import KPIAgent
 from ai_layer.agents.anomaly_agent import AnomalyAgent
@@ -8,7 +9,7 @@ from ai_layer.agents.recommendation_agent import RecommendationAgent
 from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
 
 
-class AgenticOperationalIntelligenceOrchestrator:
+class Orchestrator:
     def __init__(self):
         self.kpi_agent = KPIAgent()
         self.anomaly_agent = AnomalyAgent(settings.alert_rules_path)
@@ -22,11 +23,11 @@ class AgenticOperationalIntelligenceOrchestrator:
         store_id: str | None = None,
         region: str | None = None,
         persona: str = "store_manager",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         kpis = self.kpi_agent.run(store_id=store_id, region=region)
         alerts = self.anomaly_agent.run(kpis)
         context_docs = self.search.search(question, top_k=3)
-        promotion = self.promotion_agent.run(question, kpis, context_docs)
+        promotion = self.promotion_agent.run(kpis, context_docs)
         answer = self.recommendation_agent.run(kpis, alerts, promotion, context_docs, persona=persona)
         operational_brief = self.recommendation_agent.build_operational_brief(
             kpis,
@@ -52,7 +53,7 @@ class AgenticOperationalIntelligenceOrchestrator:
         store_id: str | None = None,
         region: str | None = None,
         persona: str = "store_manager",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         question = "Provide an operational KPI and alert brief for strategy adjustment."
         result = self.answer(
             question=question,
@@ -70,5 +71,6 @@ class AgenticOperationalIntelligenceOrchestrator:
         }
 
 
-# Backward compatibility alias; prefer AgenticOperationalIntelligenceOrchestrator.
-RetailAIOchestrator = AgenticOperationalIntelligenceOrchestrator
+@lru_cache(maxsize=1)
+def get_orchestrator() -> Orchestrator:
+    return Orchestrator()

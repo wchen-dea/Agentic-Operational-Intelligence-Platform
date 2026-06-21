@@ -1,8 +1,7 @@
-from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Any
 
 
-def detect_alerts(kpis: Dict[str, Dict[str, Any]], rules: Dict[str, Any]) -> List[Dict[str, Any]]:
+def detect_alerts(kpis: dict[str, dict[str, Any]], rules: dict[str, Any]) -> list[dict[str, Any]]:
     alerts = []
     thresholds = rules.get("thresholds", {})
     for store_id, metrics in kpis.items():

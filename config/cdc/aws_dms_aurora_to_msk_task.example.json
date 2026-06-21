@@ -1,0 +1,97 @@
+{
+  "task_name": "aurora-retail-ops-to-msk",
+  "source": {
+    "engine": "aurora-mysql",
+    "server_name": "aurora-cluster.cluster-xxxxxxxxxxxx.us-east-1.rds.amazonaws.com",
+    "port": 3306,
+    "database_name": "retail_ops",
+    "username": "aurora_app_user",
+    "password_secret_name": "aurora/mysql/app-user"
+  },
+  "target": {
+    "engine": "kafka",
+    "broker": "b-1.retail-msk.xxxxxx.c2.kafka.us-east-1.amazonaws.com:9092,b-2.retail-msk.xxxxxx.c2.kafka.us-east-1.amazonaws.com:9092",
+    "topic_prefix": "retail_ops.aurora",
+    "message_format": "json",
+    "include_transaction_details": true
+  },
+  "table_mappings": {
+    "rules": [
+      {
+        "rule-type": "selection",
+        "rule-id": "1",
+        "rule-name": "include-sales-orders",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "sales_orders"
+        },
+        "rule-action": "include"
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "2",
+        "rule-name": "include-appointments",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "appointments"
+        },
+        "rule-action": "include"
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "3",
+        "rule-name": "include-pos-invoices",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "pos_invoices"
+        },
+        "rule-action": "include"
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "4",
+        "rule-name": "include-work-orders",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "work_orders"
+        },
+        "rule-action": "include"
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "5",
+        "rule-name": "include-inventory-snapshots",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "inventory_snapshots"
+        },
+        "rule-action": "include"
+      },
+      {
+        "rule-type": "transformation",
+        "rule-id": "6",
+        "rule-name": "route-topics-by-table",
+        "rule-target": "table",
+        "object-locator": {
+          "schema-name": "retail_ops",
+          "table-name": "%"
+        },
+        "rule-action": "rename",
+        "value": "${schema-name}.${table-name}"
+      }
+    ]
+  },
+  "task_settings": {
+    "migration_type": "cdc",
+    "start_position": "now",
+    "max_full_load_subtasks": 8,
+    "stop_task_cached_changes_applied": false,
+    "stop_task_cached_changes_not_applied": false
+  },
+  "naming_conventions": {
+    "kafka_topic_pattern": "retail_ops.aurora.<schema>.<table>",
+    "bronze_table_pattern": "bronze.<table>_cdc",
+    "silver_table_pattern": "silver.<table>",
+    "gold_table_pattern": "gold.store_realtime_kpis"
+  }
+}

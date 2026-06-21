@@ -1,7 +1,6 @@
-from __future__ import annotations
-from typing import Dict, Any
+from typing import Any
 
-# Mock KPI source. Replace with Delta SQL, Databricks SQL Warehouse, Feature Store, or a serving API.
+
 SAMPLE_KPIS = {
     "245": {
         "store_id": "245",
@@ -44,7 +43,7 @@ SAMPLE_KPIS = {
 }
 
 
-def fetch_store_kpis(store_id: str | None = None, region: str | None = None) -> Dict[str, Any]:
+def fetch_store_kpis(store_id: str | None = None, region: str | None = None) -> dict[str, Any]:
     if store_id and store_id in SAMPLE_KPIS:
         return SAMPLE_KPIS[store_id]
     if region:
@@ -57,11 +56,12 @@ def fetch_store_kpis(store_id: str | None = None, region: str | None = None) -> 
             "revenue_total": sum(x["revenue_total"] for x in region_rows),
             "order_count": sum(x["order_count"] for x in region_rows),
             "overdue_work_order_count": sum(x["overdue_work_order_count"] for x in region_rows),
-            "average_appointment_show_rate": sum(x["appointment_show_rate"] for x in region_rows) / len(region_rows),
-            "average_appointment_to_order_conversion_rate": sum(x["appointment_to_order_conversion_rate"] for x in region_rows) / len(region_rows),
-            "average_pos_invoice_capture_rate": sum(x["pos_invoice_capture_rate"] for x in region_rows) / len(region_rows),
-            "average_inventory_in_stock_rate": sum(x["inventory_in_stock_rate"] for x in region_rows) / len(region_rows),
+            "appointment_show_rate": sum(x["appointment_show_rate"] for x in region_rows) / len(region_rows),
+            "appointment_to_order_conversion_rate": sum(x["appointment_to_order_conversion_rate"] for x in region_rows) / len(region_rows),
+            "pos_invoice_capture_rate": sum(x["pos_invoice_capture_rate"] for x in region_rows) / len(region_rows),
+            "inventory_in_stock_rate": sum(x["inventory_in_stock_rate"] for x in region_rows) / len(region_rows),
             "stockout_sku_count": sum(x["stockout_sku_count"] for x in region_rows),
-            "average_branded_revenue_mix_rate": sum(x["branded_revenue_mix_rate"] for x in region_rows) / len(region_rows),
+            "branded_revenue_mix_rate": sum(x["branded_revenue_mix_rate"] for x in region_rows) / len(region_rows),
+            "average_work_order_cycle_time_minutes": sum(x["average_work_order_cycle_time_minutes"] for x in region_rows) / len(region_rows),
         }
     return {"stores": list(SAMPLE_KPIS.values())}

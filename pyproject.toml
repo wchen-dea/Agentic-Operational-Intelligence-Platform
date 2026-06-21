@@ -5,11 +5,11 @@ description = "Agentic Operational Intelligence Platform"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "anthropic>=0.49.0",
     "fastapi==0.111.0",
     "uvicorn[standard]==0.30.1",
     "pydantic==2.7.4",
-    "pandas==2.2.2",
-    "numpy==1.26.4",
+    "pydantic-settings>=2.3.0",
     "pyyaml==6.0.1",
     "scikit-learn==1.5.0",
 ]

@@ -1,0 +1,27 @@
+aurora_mysql:
+  host: aurora-cluster.cluster-xxxxxxxxxxxx.us-east-1.rds.amazonaws.com
+  port: 3306
+  database: retail_ops
+  username: aurora_app_user
+  password_secret_name: aurora/mysql/app-user
+  tables:
+    sales_orders: sales_orders
+    appointments: appointments
+    pos_invoices: pos_invoices
+    work_orders: work_orders
+    inventory_snapshots: inventory_snapshots
+cdc:
+  mode: aurora_mysql_cdc
+  connector: aws_dms
+  transport: kafka_msk
+  topic_prefix: retail_ops.aurora
+  topic_pattern: retail_ops.aurora.<schema>.<table>
+  bronze_table_pattern: bronze.<table>_cdc
+  silver_table_pattern: silver.<table>
+  checkpoint_location: dbfs:/checkpoints/aurora_mysql_cdc
+  watermark_delay_seconds: 60
+  sample_task_spec: config/cdc/aws_dms_aurora_to_msk_task.example.json
+lakehouse:
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold

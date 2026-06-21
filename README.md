@@ -24,6 +24,9 @@ This repository is currently aligned to this target with:
 - Operational brief: Persona-aware summary that combines KPI state, active alerts, diagnosis, and priority actions.
 - KPI: Key Performance Indicator generated from real-time events across sales orders, appointments, POS invoices, inventory, and work orders.
 - AWS Aurora MySQL: System of record for transactional sales-order, appointment, POS-invoice, and work-order applications feeding the real-time KPI pipeline.
+- CDC topic naming convention: Kafka/MSK topics follow `retail_ops.aurora.<schema>.<table>`.
+- Bronze table naming convention: Landed CDC records follow `bronze.<table>_cdc`.
+- Silver table naming convention: Normalized operational tables follow `silver.<table>`.
 
 ## Current Capabilities
 
@@ -32,6 +35,10 @@ This repository is currently aligned to this target with:
 - Lightweight hybrid RAG implementation using local JSONL documents
 - Streaming KPI aggregator logic with cross-domain operational metrics
 - Source-system assumption that sales orders, appointments, POS invoices, and work orders originate from AWS Aurora MySQL
+- Aurora MySQL and CDC connection placeholders in `config/source_connections.example.yaml` and `config/settings.py`
+- Bronze, silver, and gold Databricks ingestion assets for Aurora MySQL modeling
+- Databricks PySpark notebook for bronze-to-silver normalization in `data_platform/batch/databricks/notebooks/bronze_to_silver_aurora_domains.ipynb`
+- Sample AWS DMS to Kafka/MSK CDC task spec in `config/cdc/aws_dms_aurora_to_msk_task.example.json`
 - Sample alert rules in YAML
 - Sample schemas for sales orders, appointments, POS invoices, and work orders
 - Unit tests for KPI and agent flows
@@ -43,6 +50,13 @@ The current project target assumes the following operating model:
 - AWS Aurora MySQL stores transactional data for the sales order system, appointment application, POS invoice activities, and work order activities.
 - Inventory signals may be sourced from Aurora MySQL or a downstream inventory service, but are modeled as part of the same operational KPI layer.
 - Change data capture from Aurora MySQL should feed the real-time event stream that drives KPI aggregation, anomaly detection, and executive/store-manager alerts.
+
+CDC naming conventions used by the reference assets:
+
+- Kafka/MSK topic: `retail_ops.aurora.<schema>.<table>`
+- Bronze landing table: `bronze.<table>_cdc`
+- Silver normalized table: `silver.<table>`
+- Gold KPI rollup table: `gold.store_realtime_kpis`
 
 ## AI Operational Intelligence Focus
 
@@ -93,6 +107,7 @@ curl -X POST http://localhost:8000/ask \
 
 ```text
 ai_layer/        RAG, agents, prompts, memory, evaluation
+config/          runtime settings and Aurora MySQL / CDC placeholders
 services/        API and runtime processors
 data_platform/   schemas, streaming jobs, Databricks SQL placeholders
 alerts/          alert rule definitions and dispatch channels
