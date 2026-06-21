@@ -73,6 +73,18 @@ curl -X POST http://localhost:8000/kpi \
 curl http://localhost:8000/alerts/245
 ```
 
+### Skills
+
+```bash
+# List all available agent skills
+curl http://localhost:8000/skills
+
+# Invoke a skill by name
+curl -X POST http://localhost:8000/skills/fetch_kpis/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"params":{"store_id":"245"}}'
+```
+
 ### Health
 
 ```bash
@@ -99,5 +111,8 @@ uv run pytest --tb=short   # short tracebacks
 ## Deployment Notes
 
 - For production, replace in-memory KPI store with Delta Lake / SQL Warehouse queries.
-- Configure `config/source_connections.example.yaml` with real Aurora MySQL and MSK endpoints.
+- Configure `config/settings.py` with real Aurora MySQL and MSK endpoints.
 - Use AWS Secrets Manager for credentials (referenced by `password_secret_name` in settings).
+- Replace `StreamingStateStore` in `ai_layer/context.py` with Redis or Kafka consumer for real-time state.
+- Connect `MetricsCollector` in `observability/evaluation.py` to Prometheus, Datadog, or CloudWatch for production dashboards.
+- Use `PromptRegistry` version pinning in production to prevent unintended prompt changes.

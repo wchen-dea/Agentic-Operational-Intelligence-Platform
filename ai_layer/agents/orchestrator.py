@@ -9,6 +9,7 @@ from ai_layer.agents.kpi_agent import KPIAgent
 from ai_layer.agents.anomaly_agent import AnomalyAgent
 from ai_layer.agents.promotion_agent import PromotionAgent
 from ai_layer.agents.recommendation_agent import RecommendationAgent
+from ai_layer.llm import reset_session_usage, get_session_cost_summary
 from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
 from ai_layer.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
 from ai_layer.orchestration.router import IntentRouter
@@ -145,6 +146,9 @@ class Orchestrator:
     ) -> dict[str, Any]:
         """Route the question by intent, build the appropriate DAG subgraph, and execute."""
 
+        # Reset per-request token tracking
+        reset_session_usage()
+
         # Phase 1: Intent classification + routing
         route = self.router.classify(question)
         logger.info("Intent: %s (confidence=%.2f), agents=%s", route.intent, route.confidence, route.required_agents)
@@ -190,6 +194,7 @@ class Orchestrator:
             "operational_brief": operational_brief,
             "answer": answer_text,
             "execution_trace": _summarize_trace(trace),
+            "token_usage": get_session_cost_summary(),
         }
 
     def get_operational_brief(

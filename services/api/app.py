@@ -26,6 +26,13 @@ def health():
     return {"status": "ok", "app": settings.app_name}
 
 
+@app.get("/usage", tags=["observability"])
+def usage():
+    """Return LLM token usage and estimated cost for the current process."""
+    from ai_layer.llm import get_session_cost_summary
+    return get_session_cost_summary()
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)

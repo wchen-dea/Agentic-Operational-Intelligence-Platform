@@ -135,27 +135,75 @@ class RecommendationAgent:
             "retrieved_context_titles": [doc.get("title") for doc in context_docs],
         }
 
-    def run(
+    # KPIs that are always worth sending (compact set for token efficiency)
+    _CORE_KPIS = [
+        "revenue_total", "order_count", "appointment_show_rate",
+        "appointment_to_order_conversion_rate", "pos_invoice_capture_rate",
+        "inventory_in_stock_rate", "stockout_sku_count", "branded_revenue_mix_rate",
+        "average_work_order_cycle_time_minutes", "overdue_work_order_count",
+    ]
+
+    def _build_compact_readout(
         self,
         kpis: dict[str, Any],
         alerts: list[dict[str, Any]],
         promo: dict[str, Any],
         context_docs: list[dict[str, Any]],
-        persona: str = "store_manager",
+        issues: list[dict[str, str]],
+        persona: str,
     ) -> str:
+        """Build a token-efficient readout for LLM consumption.
+
+        Optimizations vs full readout:
+        - Only includes KPIs that are anomalous or in the core watchlist
+        - Limits context docs to top 2 with truncated text
+        - Omits verbose playbook text (LLM generates its own)
+        """
+        store_or_region = kpis.get("store_id") or kpis.get("region") or "scope"
+        lines = [f"Readout for {store_or_region} ({persona}):"]
+
+        # Only KPIs that exist and are in the core set
+        kpi_lines = [f"  {m}: {kpis[m]}" for m in self._CORE_KPIS if m in kpis]
+        if kpi_lines:
+            lines.append("KPIs: " + ", ".join(kpi_lines))
+
+        if alerts:
+            alert_lines = [
+                f"  {a.get('severity', 'medium').upper()}: {a.get('metric')} {a.get('condition')} ({a.get('value')})"
+                for a in alerts[:5]  # cap at 5 alerts
+            ]
+            lines.append("Alerts:" + ", ".join(alert_lines))
+
+        if issues:
+            issue_lines = [f"  {i['domain']}: {i['signal']}" for i in issues]
+            lines.append("Issues:" + ", ".join(issue_lines))
+
+        recs = promo.get("recommendations", [])[:3]
+        if recs:
+            lines.append("Actions: " + "; ".join(recs))
+
+        # Top 2 context docs, truncated to 100 chars each
+        for doc in context_docs[:2]:
+            title = doc.get("title", "")
+            text = doc.get("text", "")[:100]
+            lines.append(f"Context: {title}: {text}")
+
+        return "\n".join(lines)
+
+    def _build_full_readout(
+        self,
+        kpis: dict[str, Any],
+        alerts: list[dict[str, Any]],
+        promo: dict[str, Any],
+        context_docs: list[dict[str, Any]],
+        issues: list[dict[str, str]],
+        persona: str,
+    ) -> str:
+        """Build the full structured readout (used for non-LLM fallback)."""
         store_or_region = kpis.get("store_id") or kpis.get("region") or "selected scope"
-        issues = self._diagnose_signals(kpis, promo)
-        lines = [
-            f"Operational readout for {store_or_region}:",
-            "",
-            "Key KPI signals:",
-        ]
-        for metric in [
-            "revenue_total", "order_count", "appointment_show_rate",
-            "appointment_to_order_conversion_rate", "pos_invoice_capture_rate",
-            "inventory_in_stock_rate", "stockout_sku_count", "branded_revenue_mix_rate",
-            "average_work_order_cycle_time_minutes", "overdue_work_order_count"
-        ]:
+        lines = [f"Operational readout for {store_or_region}:", "", "Key KPI signals:"]
+
+        for metric in self._CORE_KPIS:
             if metric in kpis:
                 lines.append(f"- {metric}: {kpis[metric]}")
 
@@ -185,16 +233,26 @@ class RecommendationAgent:
         for doc in context_docs:
             lines.append(f"- {doc['title']}: {doc['text']}")
 
-        structured_readout = "\n".join(lines)
+        return "\n".join(lines)
+
+    def run(
+        self,
+        kpis: dict[str, Any],
+        alerts: list[dict[str, Any]],
+        promo: dict[str, Any],
+        context_docs: list[dict[str, Any]],
+        persona: str = "store_manager",
+    ) -> str:
+        issues = self._diagnose_signals(kpis, promo)
 
         if os.environ.get(settings.llm.api_key_env_var):
-            user_prompt = OPERATIONAL_BRIEF.format_user(
-                persona=persona,
-                readout=structured_readout,
-            )
+            # Use compact readout to minimize input tokens
+            compact = self._build_compact_readout(kpis, alerts, promo, context_docs, issues, persona)
+            user_prompt = OPERATIONAL_BRIEF.format_user(persona=persona, readout=compact)
             try:
-                return llm_generate(user_prompt, system=OPERATIONAL_BRIEF.system)
+                return llm_generate(user_prompt, system=OPERATIONAL_BRIEF.system, max_tokens=512)
             except Exception as exc:
                 logger.warning("LLM generation failed, falling back to structured readout: %s", exc)
 
-        return structured_readout
+        # Fallback: full structured readout (no LLM cost)
+        return self._build_full_readout(kpis, alerts, promo, context_docs, issues, persona)

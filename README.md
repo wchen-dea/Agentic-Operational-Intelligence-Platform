@@ -8,10 +8,14 @@ Current target status: `agentic-operational-intelligence-platform`
 
 This repository is currently aligned to this target with:
 
-- Agent orchestration for KPI analysis, anomaly detection, promotion reasoning, and recommendation generation
+- DAG-based agent orchestrator with intent routing, retry/fallback, and parallel tier execution
+- Composable agent skill framework with LLM tool-calling export and per-skill observability
 - Persona-aware responses for store managers and executives
 - Real-time KPI coverage across sales orders, appointments, POS invoices, inventory, and work orders
 - AWS Aurora MySQL as the operational source system for sales orders, appointments, POS invoices, and work orders
+- Hybrid context assembly merging streaming state, vector retrieval, and session memory
+- Observability and evaluation framework with metrics collection and LLM output quality scoring
+- LLMOps prompt registry with versioning, lifecycle management, and A/B variant support
 - Operational strategy outputs for under-performing store diagnosis, branded upsell, and promotion adjustment
 
 ## Glossary
@@ -30,18 +34,58 @@ This repository is currently aligned to this target with:
 
 ## Current Capabilities
 
-- FastAPI service with `/ask`, `/kpi`, `/alerts`, and `/operations/brief` endpoints
-- Agentic operational intelligence orchestrator with KPI, anomaly, promotion, and recommendation agents
+### API
+
+- FastAPI service with `/ask`, `/kpi`, `/alerts/{store_id}`, `/operations/brief`, `/skills`, `/skills/{name}/invoke`, and `/health` endpoints
+
+### Agent Orchestration
+
+- DAG-based orchestrator with declarative agent dependency graph and topological tier execution
+- Intent-based task router classifying queries into KPI, anomaly, promotion, brief, or general QA intents
+- Per-intent subgraph extraction — only the required agents run for each query
+- Configurable retry policies with exponential backoff and fallback handlers per agent node
+- Parallel execution of independent agent nodes within each DAG tier
+- Full execution tracing with per-node timing, attempt counts, and fallback usage in every API response
+
+### Agent Skills
+
+- Composable skill framework with `Skill` ABC, typed `SkillDescriptor`, and `SkillRegistry`
+- Five built-in skills: `fetch_kpis`, `detect_anomalies`, `semantic_search`, `diagnose_signals`, `generate_narrative`
+- `to_tool_schemas()` exports all skills as LLM function-calling definitions
+- Per-skill observability instrumentation (latency, success/failure metrics)
+- Skills discoverable by name or tag; invocable via API or programmatically
+
+### Hybrid Context
+
+- `HybridContextAssembler` merges streaming state, vector/keyword retrieval, and session memory into a unified `ContextWindow`
+- `SessionMemory` with sliding-window eviction for multi-turn conversational coherence
+- `StreamingStateStore` with TTL-based cache for real-time KPI snapshots and alerts
+
+### Observability and Evaluation
+
+- `MetricsCollector` with counters, gauges, and histograms (Prometheus-compatible interface)
+- `LLMEvaluator` with rule-based quality scoring for groundedness, actionability, and conciseness
+- `AgentPerformanceTracker` recording agent duration, retries, fallbacks, and LLM token usage
+- Automatic metrics emission from DAG executor on every agent node execution
+
+### LLMOps
+
+- Centralized `PromptRegistry` with semantic versioning and lifecycle states (draft → active → deprecated → retired)
+- A/B variant support for prompt experimentation
+- Programmatic lookup by name, version, and variant with latest-active-version resolution
+- Four prompt templates: `operational_brief`, `kpi_explanation`, `anomaly_diagnosis`, `promotion_strategy`
+
+### Data Platform
+
 - Lightweight hybrid RAG implementation using local JSONL documents
 - Streaming KPI aggregator logic with cross-domain operational metrics
-- Source-system assumption that sales orders, appointments, POS invoices, and work orders originate from AWS Aurora MySQL
-- Aurora MySQL and CDC connection placeholders in `config/source_connections.example.yaml` and `config/settings.py`
+- Aurora MySQL and CDC connection placeholders in `config/settings.py`
 - Bronze, silver, and gold Databricks ingestion assets for Aurora MySQL modeling
-- Databricks PySpark notebook for bronze-to-silver normalization in `data_platform/batch/databricks/notebooks/bronze_to_silver_aurora_domains.ipynb`
+- Databricks PySpark notebook for bronze-to-silver normalization
 - Sample AWS DMS to Kafka/MSK CDC task spec in `config/cdc/aws_dms_aurora_to_msk_task.example.json`
 - Sample alert rules in YAML
 - Sample schemas for sales orders, appointments, POS invoices, and work orders
-- Unit tests for KPI and agent flows
+- Unit tests for KPI, agent, orchestration, and API flows
 
 ## Source Systems
 
@@ -106,13 +150,25 @@ curl -X POST http://localhost:8000/ask \
 ## Repo Layout
 
 ```text
-ai_layer/        RAG, agents, prompts, memory, evaluation
-config/          runtime settings and Aurora MySQL / CDC placeholders
-services/        API and runtime processors
-data_platform/   schemas, streaming jobs, Databricks SQL placeholders
-alerts/          alert rule definitions and dispatch channels
-observability/   metrics and dashboard placeholders
-tests/           unit tests
+ai_layer/
+  agents/          KPI, anomaly, promotion, recommendation agents
+  orchestration/   DAG engine, intent router, DAG executor with retry/fallback
+  skills/          Skill ABC, catalog of built-in skills, singleton registry
+  rag/             Hybrid search retriever and corpus data
+  context.py       Hybrid context assembler (streaming + vector + memory)
+  llm.py           Anthropic Claude client abstraction
+  prompts.py       Versioned prompt registry with lifecycle management
+config/            Runtime settings, Aurora MySQL / CDC placeholders
+services/
+  api/             FastAPI app with query, kpi, alerts, operations, skills routes
+  realtime_processor/  Alert dispatcher
+  scheduler/       Daily summary job
+data_platform/     Schemas, streaming jobs, Databricks SQL and notebooks
+alerts/            Alert engine, threshold config, dispatch channels
+observability/     Metrics collector, LLM evaluator, agent performance tracker
+tests/             Unit tests for agents, orchestration, API, and tools
+docs/              Architecture docs, runbook, and ADRs
+container/         Dockerfile and docker-compose.yaml
 ```
 
 ## Design Intent
