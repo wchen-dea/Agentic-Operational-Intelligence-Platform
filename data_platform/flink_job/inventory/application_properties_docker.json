@@ -1,0 +1,30 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "inventory.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalWarehouseInventorySnapshot",
+      "bootstrap.servers": "broker1:29092,broker2:29092,broker3:29092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://schema-registry:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-inventory-v1",
+      "table.name": "kafka_src_inventory"
+    }
+  },
+  {
+    "PropertyGroupId": "article.inventory",
+    "PropertyMap": {
+      "topic.name": "SinkArticleInventory",
+      "bootstrap.servers": "broker1:29092,broker2:29092,broker3:29092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://schema-registry:8081",
+      "table.name": "kafka_sink_article_inventory"
+    }
+  }
+]

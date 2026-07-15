@@ -5,6 +5,7 @@ Provides:
 - LLM output quality evaluation hooks
 - Agent performance tracking
 - Alert precision/recall measurement
+- Prometheus-compatible /metrics export via prometheus_client
 """
 
 from __future__ import annotations
@@ -18,6 +19,80 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 from typing import Any, Callable
 
+# ---------------------------------------------------------------------------
+# prometheus_client integration (optional - falls back gracefully if absent)
+# ---------------------------------------------------------------------------
+
+_prom: Any = None
+_PROM_REGISTRY: Any = None
+_PROM_METRICS: dict[str, Any] = {}
+
+try:
+    import prometheus_client as _prom_module  # type: ignore[import]
+
+    _prom = _prom_module
+
+    _PROM_REGISTRY = _prom.CollectorRegistry(auto_describe=True)
+
+    # --- Counters ---
+    for _name, _desc, _labels in [
+        ("agent_executions_total", "Total agent node executions", ["agent"]),
+        ("agent_successes_total", "Total successful agent executions", ["agent"]),
+        ("agent_failures_total", "Total failed agent executions", ["agent"]),
+        ("agent_fallbacks_total", "Total agent fallback invocations", ["agent"]),
+        ("agent_retries_total", "Total agent retry attempts", ["agent"]),
+        ("llm_calls_total", "Total LLM API calls", ["model"]),
+        ("llm_input_tokens_total", "Cumulative LLM input tokens", ["model"]),
+        ("llm_output_tokens_total", "Cumulative LLM output tokens", ["model"]),
+        ("eval_passed_total", "Total evaluations that passed", ["criteria"]),
+        ("eval_failed_total", "Total evaluations that failed", ["criteria"]),
+    ]:
+        _PROM_METRICS[_name] = _prom.Counter(_name, _desc, _labels, registry=_PROM_REGISTRY)
+
+    # --- Histograms ---
+    for _name, _desc, _labels, _buckets in [
+        (
+            "agent_duration_ms",
+            "Agent execution duration in milliseconds",
+            ["agent"],
+            [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+        ),
+        (
+            "llm_call_duration_ms",
+            "LLM API call duration in milliseconds",
+            ["model"],
+            [100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000],
+        ),
+        (
+            "eval_score",
+            "LLM output quality evaluation score (0-1)",
+            ["criteria"],
+            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        ),
+    ]:
+        _PROM_METRICS[_name] = _prom.Histogram(_name, _desc, _labels, buckets=_buckets, registry=_PROM_REGISTRY)
+
+    logger.debug("prometheus_client loaded - metrics will be exported via /metrics")
+
+except ImportError:
+    logger.info(
+        "prometheus_client not installed - /metrics will use fallback text format. "
+        "Install with: uv add prometheus-client"
+    )
+
+
+def _prom_labels(metric_name: str, labels: dict[str, str] | None) -> Any | None:
+    """Return the prometheus metric object with labels applied, or None."""
+    if _prom is None or not labels:
+        return None
+    m = _PROM_METRICS.get(metric_name)
+    if m is None:
+        return None
+    try:
+        return m.labels(**labels)
+    except Exception:
+        return None
+
 
 @dataclass
 class MetricPoint:
@@ -28,10 +103,12 @@ class MetricPoint:
 
 
 class MetricsCollector:
-    """In-process metrics collector.
+    """Dual-write metrics collector.
 
-    In production, this would emit to Prometheus/Datadog/CloudWatch.
-    Provides the same interface for local dev and testing.
+    Every ``increment``, ``gauge``, and ``observe`` call:
+    1. Updates the in-process dicts (backward-compatible ``snapshot()`` + tests).
+    2. When ``prometheus_client`` is installed, also updates the Prometheus
+       registry so ``/metrics`` exports real Prometheus exposition text.
     """
 
     def __init__(self) -> None:
@@ -40,20 +117,49 @@ class MetricsCollector:
         self._histograms: dict[str, list[float]] = defaultdict(list)
         self._points: list[MetricPoint] = []
 
+    # ------------------------------------------------------------------
+    # Write methods
+    # ------------------------------------------------------------------
+
     def increment(self, name: str, value: float = 1.0, labels: dict[str, str] | None = None) -> None:
         key = self._key(name, labels)
         self._counters[key] += value
         self._points.append(MetricPoint(name=name, value=value, labels=labels or {}))
+        # Prometheus side-channel
+        pml = _prom_labels(name, labels)
+        if pml is not None:
+            try:
+                pml.inc(value)
+            except Exception:
+                pass
 
     def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         key = self._key(name, labels)
         self._gauges[key] = value
         self._points.append(MetricPoint(name=name, value=value, labels=labels or {}))
+        # Prometheus side-channel (Gauge type)
+        pml = _prom_labels(name, labels)
+        if pml is not None:
+            try:
+                pml.set(value)
+            except Exception:
+                pass
 
     def observe(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         key = self._key(name, labels)
         self._histograms[key].append(value)
         self._points.append(MetricPoint(name=name, value=value, labels=labels or {}))
+        # Prometheus side-channel (Histogram type)
+        pml = _prom_labels(name, labels)
+        if pml is not None:
+            try:
+                pml.observe(value)
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+    # Read methods
+    # ------------------------------------------------------------------
 
     def get_counter(self, name: str, labels: dict[str, str] | None = None) -> float:
         return self._counters.get(self._key(name, labels), 0.0)
@@ -65,11 +171,50 @@ class MetricsCollector:
         return self._histograms.get(self._key(name, labels), [])
 
     def snapshot(self) -> dict[str, Any]:
+        """Return a dict snapshot of all in-process metrics (backward compat)."""
         return {
             "counters": dict(self._counters),
             "gauges": dict(self._gauges),
             "histograms": {k: _histogram_stats(v) for k, v in self._histograms.items()},
         }
+
+    def generate_latest_text(self) -> tuple[str, str]:
+        """Return ``(body, content_type)`` suitable for the ``/metrics`` HTTP endpoint.
+
+        Uses ``prometheus_client.generate_latest()`` when available; falls back to
+        manually rendered Prometheus exposition text from the in-process snapshot.
+        """
+        if _prom is not None and _PROM_REGISTRY is not None:
+            try:
+                body = _prom.generate_latest(_PROM_REGISTRY).decode("utf-8")
+                return body, _prom.CONTENT_TYPE_LATEST
+            except Exception as exc:
+                logger.warning("prometheus_client generate_latest failed: %s", exc)
+
+        # Fallback: render snapshot as Prometheus text format
+        return self._format_snapshot_as_prometheus(), "text/plain; version=0.0.4"
+
+    def _format_snapshot_as_prometheus(self) -> str:
+        snap = self.snapshot()
+        lines: list[str] = []
+        for key, value in snap.get("counters", {}).items():
+            name, label_str = _split_metric_key(key)
+            pname = _sanitize_prom_name(name)
+            lines.append(f"# TYPE {pname} counter")
+            lines.append(f"{pname}{label_str} {value}")
+        for key, value in snap.get("gauges", {}).items():
+            name, label_str = _split_metric_key(key)
+            pname = _sanitize_prom_name(name)
+            lines.append(f"# TYPE {pname} gauge")
+            lines.append(f"{pname}{label_str} {value}")
+        for key, stats in snap.get("histograms", {}).items():
+            name, label_str = _split_metric_key(key)
+            pname = _sanitize_prom_name(name)
+            lines.append(f"# TYPE {pname} summary")
+            lines.append(f"{pname}_count{label_str} {stats.get('count', 0)}")
+            lines.append(f"{pname}_sum{label_str} {stats.get('sum', 0.0)}")
+        lines.append("")
+        return "\n".join(lines)
 
     @staticmethod
     def _key(name: str, labels: dict[str, str] | None) -> str:
@@ -77,6 +222,17 @@ class MetricsCollector:
             return name
         label_str = ",".join(f"{k}={v}" for k, v in sorted(labels.items()))
         return f"{name}{{{label_str}}}"
+
+
+def _split_metric_key(key: str) -> tuple[str, str]:
+    if "{" in key:
+        idx = key.index("{")
+        return key[:idx], key[idx:]
+    return key, ""
+
+
+def _sanitize_prom_name(name: str) -> str:
+    return name.replace(".", "_").replace("-", "_")
 
 
 def _histogram_stats(values: list[float]) -> dict[str, float]:
@@ -156,9 +312,22 @@ class LLMEvaluator:
     def _eval_actionability(self, output: str, context: dict[str, Any]) -> EvalResult:
         """Check for action-oriented language."""
         action_markers = [
-            "recommend", "action", "prioritize", "implement", "deploy",
-            "review", "monitor", "escalate", "adjust", "launch", "reduce",
-            "increase", "run", "execute", "shift", "push",
+            "recommend",
+            "action",
+            "prioritize",
+            "implement",
+            "deploy",
+            "review",
+            "monitor",
+            "escalate",
+            "adjust",
+            "launch",
+            "reduce",
+            "increase",
+            "run",
+            "execute",
+            "shift",
+            "push",
         ]
         found = sum(1 for m in action_markers if m in output.lower())
         score = min(found / 3.0, 1.0)
@@ -190,10 +359,27 @@ class LLMEvaluator:
         question = context.get("question", "")
         intent = context.get("intent", "")
         if not question:
-            return EvalResult(score=0.5, passed=True, criteria=EvalCriteria.RELEVANCE, details="No question to evaluate against.")
+            return EvalResult(
+                score=0.5, passed=True, criteria=EvalCriteria.RELEVANCE, details="No question to evaluate against."
+            )
 
         # Check keyword overlap between question and output
-        q_words = set(question.lower().split()) - {"the", "a", "an", "is", "are", "what", "why", "how", "for", "and", "or", "to", "in", "of"}
+        q_words = set(question.lower().split()) - {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "what",
+            "why",
+            "how",
+            "for",
+            "and",
+            "or",
+            "to",
+            "in",
+            "of",
+        }
         out_lower = output.lower()
         matched = sum(1 for w in q_words if w in out_lower)
         coverage = matched / max(len(q_words), 1)
@@ -226,16 +412,31 @@ class LLMEvaluator:
 
         if persona == "executive":
             exec_markers = [
-                "region", "strategic", "portfolio", "variance", "budget",
-                "cross-store", "intervention", "reallocate", "roi",
+                "region",
+                "strategic",
+                "portfolio",
+                "variance",
+                "budget",
+                "cross-store",
+                "intervention",
+                "reallocate",
+                "roi",
             ]
             found = sum(1 for m in exec_markers if m in out_lower)
             score = min(found / 3.0, 1.0)
             details = f"Executive markers found: {found}/{len(exec_markers)}."
         else:
             ops_markers = [
-                "store", "daily", "huddle", "team", "advisor", "coaching",
-                "shift", "staffing", "checkout", "sku",
+                "store",
+                "daily",
+                "huddle",
+                "team",
+                "advisor",
+                "coaching",
+                "shift",
+                "staffing",
+                "checkout",
+                "sku",
             ]
             found = sum(1 for m in ops_markers if m in out_lower)
             score = min(found / 3.0, 1.0)
@@ -304,12 +505,14 @@ class LLMEvaluator:
                         details = parts[1].strip() if len(parts) > 1 else ""
                         break
 
-                results.append(EvalResult(
-                    score=score,
-                    passed=score >= 0.5,
-                    criteria=c,
-                    details=f"[LLM-judge] {details}",
-                ))
+                results.append(
+                    EvalResult(
+                        score=score,
+                        passed=score >= 0.5,
+                        criteria=c,
+                        details=f"[LLM-judge] {details}",
+                    )
+                )
 
         except Exception as exc:
             logger.warning("LLM-as-judge failed, falling back to rules: %s", exc)

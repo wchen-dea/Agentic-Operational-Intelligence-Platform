@@ -1,9 +1,9 @@
-"""Guardrails — input validation, output validation, and content safety.
+"""Guardrails - input validation, output validation, and content safety.
 
 Provides three layers of protection:
-1. **Input guardrails** — prompt injection detection, PII scrubbing, length limits
-2. **Output guardrails** — hallucination checks, schema conformance, content filtering
-3. **FastAPI middleware** — wraps every request/response through the guardrail pipeline
+1. **Input guardrails** - prompt injection detection, PII scrubbing, length limits
+2. **Output guardrails** - hallucination checks, schema conformance, content filtering
+3. **FastAPI middleware** - wraps every request/response through the guardrail pipeline
 """
 
 from __future__ import annotations
@@ -77,11 +77,13 @@ def validate_input(text: str, scrub_pii: bool = True) -> GuardrailResult:
 
     # Length check
     if len(text) > _MAX_INPUT_LENGTH:
-        checks.append({
-            "check": "input_length",
-            "status": "blocked",
-            "detail": f"Input exceeds {_MAX_INPUT_LENGTH} characters ({len(text)}).",
-        })
+        checks.append(
+            {
+                "check": "input_length",
+                "status": "blocked",
+                "detail": f"Input exceeds {_MAX_INPUT_LENGTH} characters ({len(text)}).",
+            }
+        )
         action = GuardrailAction.BLOCK
         return GuardrailResult(action=action, checks=checks, sanitized_text=None)
     checks.append({"check": "input_length", "status": "pass"})
@@ -93,12 +95,14 @@ def validate_input(text: str, scrub_pii: bool = True) -> GuardrailResult:
         if match:
             injection_matches.append(match.group())
     if injection_matches:
-        checks.append({
-            "check": "prompt_injection",
-            "status": "blocked",
-            "detail": f"Detected {len(injection_matches)} prompt injection pattern(s).",
-            "matches": injection_matches,
-        })
+        checks.append(
+            {
+                "check": "prompt_injection",
+                "status": "blocked",
+                "detail": f"Detected {len(injection_matches)} prompt injection pattern(s).",
+                "matches": injection_matches,
+            }
+        )
         action = GuardrailAction.BLOCK
         return GuardrailResult(action=action, checks=checks, sanitized_text=None)
     checks.append({"check": "prompt_injection", "status": "pass"})
@@ -111,12 +115,14 @@ def validate_input(text: str, scrub_pii: bool = True) -> GuardrailResult:
             if scrub_pii:
                 sanitized = pattern.sub(f"[{pii_type.upper()}_REDACTED]", sanitized)
     if pii_found:
-        checks.append({
-            "check": "pii_detection",
-            "status": "warn" if scrub_pii else "blocked",
-            "detail": f"Detected PII types: {', '.join(pii_found)}.",
-            "scrubbed": scrub_pii,
-        })
+        checks.append(
+            {
+                "check": "pii_detection",
+                "status": "warn" if scrub_pii else "blocked",
+                "detail": f"Detected PII types: {', '.join(pii_found)}.",
+                "scrubbed": scrub_pii,
+            }
+        )
         if not scrub_pii:
             action = GuardrailAction.BLOCK
         else:
@@ -154,32 +160,33 @@ def validate_output(
     # Blocked output patterns
     for pattern in _BLOCKED_OUTPUT_PATTERNS:
         if pattern.search(text):
-            checks.append({
-                "check": "blocked_content",
-                "status": "blocked",
-                "detail": "Output contains potentially sensitive content.",
-            })
+            checks.append(
+                {
+                    "check": "blocked_content",
+                    "status": "blocked",
+                    "detail": "Output contains potentially sensitive content.",
+                }
+            )
             action = GuardrailAction.BLOCK
             return GuardrailResult(action=action, checks=checks)
     checks.append({"check": "blocked_content", "status": "pass"})
 
-    # Hallucination check — look for metric names that don't exist in catalog
+    # Hallucination check - look for metric names that don't exist in catalog
     if kpi_names:
         # Extract metric-like names from the output (snake_case words)
         mentioned = set(re.findall(r"\b([a-z][a-z0-9_]{5,})\b", text.lower()))
         known = set(k.lower() for k in kpi_names)
         # Only flag terms that look like KPI names (contain common suffixes)
         kpi_suffixes = {"_rate", "_count", "_total", "_time", "_pct", "_proxy", "_mix"}
-        fabricated = {
-            m for m in mentioned - known
-            if any(m.endswith(s) for s in kpi_suffixes)
-        }
+        fabricated = {m for m in mentioned - known if any(m.endswith(s) for s in kpi_suffixes)}
         if fabricated:
-            checks.append({
-                "check": "hallucination",
-                "status": "warn",
-                "detail": f"Potentially fabricated KPI names: {', '.join(sorted(fabricated))}.",
-            })
+            checks.append(
+                {
+                    "check": "hallucination",
+                    "status": "warn",
+                    "detail": f"Potentially fabricated KPI names: {', '.join(sorted(fabricated))}.",
+                }
+            )
             action = max(action, GuardrailAction.WARN, key=lambda x: list(GuardrailAction).index(x))
         else:
             checks.append({"check": "hallucination", "status": "pass"})
@@ -187,11 +194,13 @@ def validate_output(
     # Minimum quality
     word_count = len(text.split())
     if word_count < 5:
-        checks.append({
-            "check": "quality",
-            "status": "warn",
-            "detail": f"Output is very short ({word_count} words).",
-        })
+        checks.append(
+            {
+                "check": "quality",
+                "status": "warn",
+                "detail": f"Output is very short ({word_count} words).",
+            }
+        )
         action = max(action, GuardrailAction.WARN, key=lambda x: list(GuardrailAction).index(x))
     else:
         checks.append({"check": "quality", "status": "pass"})

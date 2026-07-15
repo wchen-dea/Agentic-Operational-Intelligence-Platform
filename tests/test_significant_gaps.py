@@ -349,13 +349,13 @@ def test_prometheus_metrics_endpoint():
     from services.api.app import app
 
     client = TestClient(app)
-    # Seed a metric
+    # Seed a metric via the collector so it appears in the output
     collector = get_metrics_collector()
-    collector.increment("http_requests_total", labels={"method": "GET"})
+    collector.increment("agent_executions_total", labels={"agent": "kpi"})
 
     resp = client.get("/metrics")
     assert resp.status_code == 200
     assert "text/plain" in resp.headers["content-type"]
     body = resp.text
-    assert "http_requests_total" in body
+    assert "agent_executions_total" in body
     assert "# TYPE" in body

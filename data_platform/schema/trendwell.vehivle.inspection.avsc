@@ -1,0 +1,354 @@
+{
+  "type": "record",
+  "name": "inspection",
+  "namespace": "com.canonicla.trendwell.vehivle",
+  "fields": [
+    {
+      "name": "inspectionIdentifier",
+      "type": "string",
+      "doc": "Vehicle Inspection unique record identifier created by the sys"
+    },
+    {
+      "name": "customerIdentifier",
+      "type": "string",
+      "doc": "Customer Number Unique record ID identifying the customer who's vehicle is undergoing an inspection (from C360)",
+      "default": "0"
+    },
+    {
+      "name": "VIN",
+      "type": ["null", "string"],
+      "doc": "Vehicle Identification Number of customer's vehicle",
+      "default": null
+    },
+    {
+      "name": "vehicleLicensePlateNumber",
+      "type": ["null", "string"],
+      "doc": "Alphanumeric code on the vehicle's license plate",
+      "default": null
+    },
+    {
+      "name": "originalReasonCode",
+      "type": ["null", "string"],
+      "doc": "Reason for vehicle inspection upon vehicle arrival",
+      "default": null
+    },
+    {
+      "name": "reasonCode",
+      "type": ["null", "string"],
+      "doc": "Location within the site/store where vehicle inspection was performed (lot, null, etc.)",
+      "default": null
+    },
+    {
+      "name": "inspectionLocation",
+      "type": ["null", "string"],
+      "doc": "Unique identifier of the specific site where vehicle inspection was performed",
+      "default": null
+    },
+    {
+      "name": "siteNumber",
+      "type": "string",
+      "doc": "Code denoting the specific store that performed vehicle inspection"
+    },
+    {
+      "name": "storeCode",
+      "type": ["null", "string"],
+      "doc": "Unique identifier of site/store employee who performed vehicle inspection",
+      "default": null
+    },
+    {
+      "name": "createWorkerIdentifier",
+      "type": ["null", "string"],
+      "doc": "UTC timestamp indicating when the inspection data was captured",
+      "default": null
+    },
+    {
+      "name": "createTimestamp",
+      "type": "string",
+      "doc": "Source from which the data is coming in from"
+    },
+    {
+      "name": "createBySourceName",
+      "type": "string",
+      "doc": "UTC timestamp indicating the date and time the record was last updated"
+    },
+    {
+      "name": "lastUpdateTimestamp",
+      "type": ["null", "string"],
+      "doc": "UTC timestamp indicating the date and time the record was last updated",
+      "default": null
+    },
+    {
+      "name": "deviceIdentifier",
+      "type": ["null", "string"],
+      "doc": "Unique identifier for device used to perform vehicle inspection",
+      "default": null
+    },
+    {
+      "name": "inspectionComments",
+      "type": ["null", "string"],
+      "doc": "Additional notes relevant to the vehicle inspection",
+      "default": null
+    },
+    {
+      "name": "vehicleCondition",
+      "type": ["null", "string"],
+      "doc": "Condition of the vehicle determined by the employee performing the inspection",
+      "default": null
+    },
+    {
+      "name": "mileageReading",
+      "type": ["null", "int"],
+      "doc": "Mileage reading of vehicle being inspected",
+      "default": null
+    },
+    {
+      "name": "kilometerReading",
+      "type": ["null", "int"],
+      "doc": "Kilometer reading of the vehicle being inspected",
+      "default": null
+    },
+    {
+      "name": "rotationPattern",
+      "type": ["null", "string"],
+      "doc": "Standard tire rotation pattern for the tire in use",
+      "default": null
+    },
+    {
+      "name": "TPMSStatus",
+      "type": ["null", "string"],
+      "doc": "State of the vehicle's Tire Pressure Monitoring System indicator(s) upon inspection (\"Flashing\", \"Not Flashing\", etc.)",
+      "default": null
+    },
+    {
+      "name": "spareInUseIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating if the vehicle's spare tire is in use",
+      "default": null
+    },
+    {
+      "name": "wheelLockIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating the vehicle has locking lug nuts that require a special wrench-locking head",
+      "default": null
+    },
+    {
+      "name": "carryOutIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating if customer intends to take purchased tire(s) home",
+      "default": null
+    },
+    {
+      "name": "replaceAllTiresIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating if all tires are to be replaced during service",
+      "default": null
+    },
+    {
+      "name": "replaceAllWheelsIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating if all wheels are to be replaced during service",
+      "default": null
+    },
+    {
+      "name": "DOTCommunicationOptInIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating customer has opted in to receiving DOT communication",
+      "default": null
+    },
+    {
+      "name": "vehicleIdentifier",
+      "type": ["null", "string"],
+      "doc": "Id describing generic vehicle matching that of the customer",
+      "default": null
+    },
+    {
+      "name": "vehicleYear",
+      "type": ["null", "string"],
+      "doc": "Model year of the vehicle",
+      "default": null
+    },
+    {
+      "name": "vehicleMake",
+      "type": ["null", "string"],
+      "doc": "Vehicle brand",
+      "default": null
+    },
+    {
+      "name": "vehicleModel",
+      "type": ["null", "string"],
+      "doc": "Vehicle model name",
+      "default": null
+    },
+    {
+      "name": "trimIdentifier",
+      "type": ["null", "string"],
+      "doc": "Unqiue id generated by the system to denote the version of the customer's vehicle model",
+      "default": null
+    },
+    {
+      "name": "assemblyIdentifier",
+      "type": ["null", "string"],
+      "doc": "Unique id generated by the system denoting the vehicle's assembly type",
+      "default": null
+    },
+    {
+      "name": "chassisIdentifier",
+      "type": ["null", "string"],
+      "doc": "Chassis unique record identifier used when referencing the axle",
+      "default": null
+    },
+    {
+      "name": "frontAssemblyCode",
+      "type": ["null", "string"],
+      "doc": "Code identifying the tire specifications of the front wheels",
+      "default": null
+    },
+    {
+      "name": "rearAssemblyCode",
+      "type": ["null", "string"],
+      "doc": "Code identifying the tire specifications of the rear wheels",
+      "default": null
+    },
+    {
+      "name": "dualRearWheelIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating dual wheels on both sides of the rear of the vehicle",
+      "default": null
+    },
+    {
+      "name": "nonOEIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating the vehicle has parts and/or assemblies that were not marketed by the Original Equipment Manufacturer (i.e., not marketed under the brand name of the vehicle)",
+      "default": null
+    },
+    {
+      "name": "staggeredIndicator",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating the vehicle has rear wheels that are different sizes than the front wheels",
+      "default": null
+    },
+    {
+      "name": "ACESVehicleIdentifier",
+      "type": ["null", "string"],
+      "doc": "ACES (Aftermarket Catalog Exchange Standard) Id representing a vehicle, pirmarily used for fitment",
+      "default": null
+    },
+    {
+      "name": "ACESBodyTypeCode",
+      "type": ["null", "string"],
+      "doc": "ACES (Aftermarket Catalog Exchange Standard) Code for Vehicle Body Type",
+      "default": null
+    },
+    {
+      "name": "ACESDriveIdentifier",
+      "type": ["null", "string"],
+      "doc": "ACES (Aftermarket Catalog Exchange Standard) Id for the type of drivetrain on a vehicle",
+      "default": null
+    },
+    {
+      "name": "timeOffset",
+      "type": ["null", "string"],
+      "doc": "Time difference in hours between the local timestamp and the coordinated universal timestamp (UTC)",
+      "default": null
+    },
+    {
+      "name": "driverName",
+      "type": ["null", "string"],
+      "doc": "Name of customer contact for vehicle being serviced",
+      "default": null
+    },
+    {
+      "name": "driverEmail",
+      "type": ["null", "string"],
+      "doc": "Email of customer contact for vehicle being serviced",
+      "default": null
+    },
+    {
+      "name": "driverPhone",
+      "type": ["null", "string"],
+      "doc": "Phone number of customer contact for vehicle being serviced",
+      "default": null
+    },
+    {
+      "name": "tireInspectionDetails",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "VehicleTireInspectionDetail",
+          "fields": [
+            {
+              "name": "tirePositionCode",
+              "type": "string",
+              "doc": "Code indicating the vehicle's tire position for use in detail report (LF = Left Front, RF = Right Front, SP = Spare, RR = Right Rear, LR = Left Rear, ILR = Inner Left Rear, IRR = Inner Right Rear, OLR = Outer Left Rear, ORR = Outer Right Rear)"
+            },
+            {
+              "name": "DOTNumber",
+              "type": ["null", "string"],
+              "doc": "Department of transportation number",
+              "default": null
+            },
+            {
+              "name": "recallIndicator",
+              "type": ["null", "boolean"],
+              "doc": "Flag indicating that a recall exists for specific tire in use",
+              "default": null
+            },
+            {
+              "name": "tireServicesPerformed",
+              "type": ["null", "string"],
+              "doc": "List of vehicle services performed as a result of Vehicle Inspection",
+              "default": null
+            },
+            {
+              "name": "tireAge",
+              "type": ["null", "double"],
+              "doc": "Age in months since manufacture; based on DOTNumber",
+              "default": null
+            },
+            {
+              "name": "tireStatus",
+              "type": ["null", "string"],
+              "doc": "State of tire upon inspection (Good, Caution, Replace, or Blank)",
+              "default": null
+            },
+            {
+              "name": "measurementEntryMethodCode",
+              "type": ["null", "string"],
+              "doc": "Measurement Type unique record identifier generated by the system for use in measurement report (Scan, No Entry, Manual, Override)",
+              "default": null
+            },
+            {
+              "name": "tireInspectionMeasurements",
+              "type": {
+                "type": "array",
+                "items": {
+                  "type": "record",
+                  "name": "VehicleTireInspectionMeasurement",
+                  "fields": [
+                    {
+                      "name": "measurementLocation",
+                      "type": ["null", "string"],
+                      "doc": "Location on tire where tread depth measurement was taken (Inner, Center, Outer)",
+                      "default": null
+                    },
+                    {
+                      "name": "measurementValue",
+                      "type": ["null", "string"],
+                      "doc": "Measurement reading value during the inspection for use in measurement report",
+                      "default": null
+                    }
+                  ]
+                }
+              },
+              "doc": "VehicleTireInspectionMeasurement is a collection describing each of the measurement locations on a single tire; i = [0,3]",
+              "default": []
+            }
+          ]
+        }
+      },
+      "doc": "VehicleTireInspectionDetail namespace is a collection describing each tire on a vehicle; i = [0,7]",
+      "default": []
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalSapSalesorderDetail",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-sales-order-v1",
+      "table.name": "kafka_src_sales_order"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrder",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_sales_order"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.line_item",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrderLineItem",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_so_line_item"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.promotion",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrderPromotion",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_so_promotion"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.line_item.fee",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrderLineItemFee",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_so_li_fee"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.line_item.tax",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrderLineItemTax",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_so_li_tax"
+    }
+  },
+  {
+    "PropertyGroupId": "sales_order.line_item.promotion",
+    "PropertyMap": {
+      "topic.name": "SinkSalesOrderLineItemPromotion",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_so_li_promo"
+    }
+  }
+]

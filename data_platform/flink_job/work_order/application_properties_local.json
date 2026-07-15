@@ -1,0 +1,60 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "wom.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalTrendwellVehivleWorkorder",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-wom-v1",
+      "table.name": "kafka_src_work_order"
+    }
+  },
+  {
+    "PropertyGroupId": "wom.work_order",
+    "PropertyMap": {
+      "topic.name": "SinkWorkOrder",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_work_order"
+    }
+  },
+  {
+    "PropertyGroupId": "wom.line_item",
+    "PropertyMap": {
+      "topic.name": "SinkWorkOrderLineItem",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_work_order_line_item"
+    }
+  },
+  {
+    "PropertyGroupId": "wom.bay_assignment",
+    "PropertyMap": {
+      "topic.name": "SinkWorkOrderBayAssignment",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_work_order_bay_assignment"
+    }
+  },
+  {
+    "PropertyGroupId": "wom.employee",
+    "PropertyMap": {
+      "topic.name": "SinkWorkOrderEmployee",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_work_order_employee"
+    }
+  }
+]

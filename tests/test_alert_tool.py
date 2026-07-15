@@ -3,6 +3,7 @@ from ai_layer.agents.tools.alert_tool import load_rules, detect_kpi_alerts_for_s
 
 def test_load_rules_valid_path():
     from config.settings import settings
+
     rules = load_rules(settings.alert_rules_path)
     assert "thresholds" in rules
     assert "revenue_total" in rules["thresholds"]
@@ -16,6 +17,7 @@ def test_load_rules_missing_file():
 
 def test_detect_kpi_alerts_for_store():
     from config.settings import settings
+
     kpis = {
         "store_id": "999",
         "revenue_total": 500,

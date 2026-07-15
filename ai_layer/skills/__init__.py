@@ -1,9 +1,9 @@
-"""Agent skill framework — composable, self-describing capabilities for agents.
+"""Agent skill framework - composable, self-describing capabilities for agents.
 
 A Skill is a discrete, reusable capability that an agent can invoke. Each skill
 declares its name, description, input schema, and execution logic. This enables:
 - Dynamic skill discovery and invocation
-- LLM function-calling integration (skills → tool definitions)
+- LLM function-calling integration (skills -> tool definitions)
 - Per-skill observability and evaluation
 - Cross-agent skill reuse
 """
@@ -83,15 +83,11 @@ class Skill(ABC):
         try:
             result = self.execute(**kwargs)
             duration = (time.perf_counter() - start) * 1000
-            tracker.record_execution(
-                f"skill:{self.descriptor.name}", duration, success=True
-            )
+            tracker.record_execution(f"skill:{self.descriptor.name}", duration, success=True)
             return result
         except Exception as e:
             duration = (time.perf_counter() - start) * 1000
-            tracker.record_execution(
-                f"skill:{self.descriptor.name}", duration, success=False
-            )
+            tracker.record_execution(f"skill:{self.descriptor.name}", duration, success=False)
             raise
 
 

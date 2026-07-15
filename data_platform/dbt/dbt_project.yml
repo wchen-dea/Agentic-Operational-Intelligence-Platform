@@ -1,0 +1,45 @@
+name: aoip_lakehouse
+version: "1.0.0"
+config-version: 2
+profile: aoip_spark
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+# ---------------------------------------------------------------------------
+# Global model defaults — Iceberg on MinIO via Spark
+# ---------------------------------------------------------------------------
+models:
+  aoip_lakehouse:
+    +file_format: iceberg
+    +location_root: "s3a://warehouse"
+    staging:
+      +materialized: view
+      +schema: landing # reads from iceberg.landing.* (Spark-managed)
+    bronze:
+      +materialized: incremental
+      +incremental_strategy: append
+      +schema: bronze
+      +on_schema_change: append_new_columns
+      +partition_by:
+        field: _ingested_date
+        data_type: date
+    silver:
+      +materialized: incremental
+      +incremental_strategy: merge
+      +schema: silver
+      +on_schema_change: sync_all_columns
+    gold:
+      +materialized: table
+      +schema: gold
+    analytics:
+      +materialized: table
+      +schema: analytics
+      +file_format: iceberg
+      +location_root: "s3a://warehouse"
+seeds:
+  aoip_lakehouse:
+    +schema: seeds

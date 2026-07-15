@@ -18,12 +18,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ai_layer.context import SessionMemory
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / ".data" / "session_memory.db"
 
 
-class PersistentSessionMemory:
+class PersistentSessionMemory(SessionMemory):
     """SQLite-backed conversational memory with TTL and knowledge accumulation.
 
     Parameters:
@@ -100,7 +102,7 @@ class PersistentSessionMemory:
                 "INSERT INTO turns (session_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?)",
                 (session_id, role, content, meta_json, now),
             )
-            # Enforce sliding window — keep only the most recent N turns
+            # Enforce sliding window - keep only the most recent N turns
             conn.execute(
                 """
                 DELETE FROM turns
@@ -166,10 +168,7 @@ class PersistentSessionMemory:
                 "SELECT session_id, value, created_at FROM knowledge WHERE key = ? ORDER BY created_at DESC LIMIT ?",
                 (key, limit),
             ).fetchall()
-        return [
-            {"session_id": r[0], "value": r[1], "created_at": r[2]}
-            for r in rows
-        ]
+        return [{"session_id": r[0], "value": r[1], "created_at": r[2]} for r in rows]
 
     # ------------------------------------------------------------------
     # Housekeeping

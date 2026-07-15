@@ -1,4 +1,4 @@
-"""Model routing — selects the optimal model by task complexity and handles fallback.
+"""Model routing - selects the optimal model by task complexity and handles fallback.
 
 Routes requests to the most cost-effective model:
 - **Haiku** (fast/cheap): classification, intent routing, simple lookups
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class TaskComplexity(str, Enum):
-    LOW = "low"       # classification, extraction, simple Q&A
+    LOW = "low"  # classification, extraction, simple Q&A
     MEDIUM = "medium"  # generation, summarization, narratives
-    HIGH = "high"      # multi-step reasoning, evaluation, analysis
+    HIGH = "high"  # multi-step reasoning, evaluation, analysis
 
 
 @dataclass(frozen=True)
@@ -32,12 +32,12 @@ class ModelSpec:
     model_id: str
     complexity: TaskComplexity
     max_tokens: int
-    cost_input_per_m: float   # $/M input tokens
+    cost_input_per_m: float  # $/M input tokens
     cost_output_per_m: float  # $/M output tokens
-    priority: int             # lower = preferred for its complexity tier
+    priority: int  # lower = preferred for its complexity tier
 
 
-# Model catalog — add new models here
+# Model catalog - add new models here
 _MODEL_CATALOG: list[ModelSpec] = [
     ModelSpec(
         name="haiku",
@@ -68,7 +68,7 @@ _MODEL_CATALOG: list[ModelSpec] = [
     ),
 ]
 
-# Fallback order: Opus → Sonnet → Haiku
+# Fallback order: Opus -> Sonnet -> Haiku
 _FALLBACK_ORDER = ["opus", "sonnet", "haiku"]
 
 
@@ -94,10 +94,7 @@ class ModelRouter:
             complexity = self._infer_complexity(task_hint or "")
 
         # Find matching models not in cooldown, sorted by priority
-        candidates = [
-            m for m in self._models.values()
-            if m.complexity == complexity and m.name not in self._failed
-        ]
+        candidates = [m for m in self._models.values() if m.complexity == complexity and m.name not in self._failed]
 
         if candidates:
             return min(candidates, key=lambda m: m.priority)
@@ -108,7 +105,8 @@ class ModelRouter:
                 model = self._models[name]
                 logger.warning(
                     "No %s model available, falling back to %s",
-                    complexity.value, model.name,
+                    complexity.value,
+                    model.name,
                 )
                 return model
 
@@ -137,16 +135,32 @@ class ModelRouter:
 
         # High complexity indicators
         high_keywords = [
-            "analyze", "diagnose", "investigate", "evaluate", "compare",
-            "root cause", "strategy", "multi-step", "reasoning", "why",
+            "analyze",
+            "diagnose",
+            "investigate",
+            "evaluate",
+            "compare",
+            "root cause",
+            "strategy",
+            "multi-step",
+            "reasoning",
+            "why",
         ]
         if any(kw in hint for kw in high_keywords):
             return TaskComplexity.HIGH
 
         # Low complexity indicators
         low_keywords = [
-            "classify", "extract", "intent", "route", "label", "categorize",
-            "yes or no", "true or false", "which", "list",
+            "classify",
+            "extract",
+            "intent",
+            "route",
+            "label",
+            "categorize",
+            "yes or no",
+            "true or false",
+            "which",
+            "list",
         ]
         if any(kw in hint for kw in low_keywords):
             return TaskComplexity.LOW

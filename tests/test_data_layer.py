@@ -14,6 +14,7 @@ from data_platform.kpi_store import SQLiteKPISource, fetch_store_kpis
 # KPI catalog
 # ---------------------------------------------------------------------------
 
+
 def test_kpi_catalog_loads():
     meta = get_kpi_metadata("revenue_total")
     assert meta["unit"] == "USD"
@@ -30,6 +31,7 @@ def test_kpi_catalog_unknown_metric():
 # ---------------------------------------------------------------------------
 # KPIRecord
 # ---------------------------------------------------------------------------
+
 
 def test_kpi_record_anomalous_below_min():
     r = KPIRecord(name="revenue_total", value=500.0, threshold_min=1000.0)
@@ -48,8 +50,11 @@ def test_kpi_record_ok():
 
 def test_kpi_record_to_llm_summary():
     r = KPIRecord(
-        name="revenue_total", value=500.0, unit="USD",
-        threshold_min=1000.0, description="Total revenue.",
+        name="revenue_total",
+        value=500.0,
+        unit="USD",
+        threshold_min=1000.0,
+        description="Total revenue.",
     )
     summary = r.to_llm_summary()
     assert "ANOMALOUS" in summary
@@ -60,6 +65,7 @@ def test_kpi_record_to_llm_summary():
 # ---------------------------------------------------------------------------
 # DataProvenance
 # ---------------------------------------------------------------------------
+
 
 def test_data_provenance_to_dict():
     prov = DataProvenance(source="sqlite", event_count=42)
@@ -72,6 +78,7 @@ def test_data_provenance_to_dict():
 # ---------------------------------------------------------------------------
 # enrich_kpis
 # ---------------------------------------------------------------------------
+
 
 def test_enrich_kpis_from_raw():
     raw = {
@@ -119,6 +126,7 @@ def test_enrich_kpis_llm_context():
 # SQLiteKPISource
 # ---------------------------------------------------------------------------
 
+
 def test_sqlite_source_fetch_by_store():
     src = SQLiteKPISource()  # in-memory, seeded
     data = src.fetch_by_store("245")
@@ -159,6 +167,7 @@ def test_sqlite_source_missing_store():
 # ---------------------------------------------------------------------------
 # fetch_store_kpis (high-level function)
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_store_kpis_backward_compatible():
     data = fetch_store_kpis(store_id="245")

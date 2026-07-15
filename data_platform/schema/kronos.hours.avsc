@@ -1,0 +1,310 @@
+{
+  "type": "record",
+  "name": "hours",
+  "namespace": "com.canonicla.kronos",
+  "fields": [
+    {
+      "name": "personFullName",
+      "type": ["null", "string"],
+      "doc": "Employee's full name",
+      "default": null
+    },
+    {
+      "name": "personNumber",
+      "type": "string",
+      "doc": "Employee's number"
+    },
+    {
+      "name": "laborLevelName1",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 1",
+      "default": null
+    },
+    {
+      "name": "laborLevelName2",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 2",
+      "default": null
+    },
+    {
+      "name": "laborLevelName3",
+      "type": "string",
+      "doc": "Employees labor level name 3"
+    },
+    {
+      "name": "laborLevelName4",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 4",
+      "default": null
+    },
+    {
+      "name": "laborLevelName5",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 5",
+      "default": null
+    },
+    {
+      "name": "laborLevelName6",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 6",
+      "default": null
+    },
+    {
+      "name": "laborLevelName7",
+      "type": ["null", "string"],
+      "doc": "Employees labor level name 7",
+      "default": null
+    },
+    {
+      "name": "laborAcctName",
+      "type": ["null", "string"],
+      "doc": "Employee's labor account name",
+      "default": null
+    },
+    {
+      "name": "payCodeName",
+      "type": "string",
+      "doc": "Employee's pay code name"
+    },
+    {
+      "name": "payCodeType",
+      "type": "string",
+      "doc": "Employee's pay code type"
+    },
+    {
+      "name": "isMoneyAmountSW",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating if value is money amount",
+      "default": null
+    },
+    {
+      "name": "timeInSeconds",
+      "type": ["null", "string"],
+      "doc": "Time in seconds employee has clocked",
+      "default": null
+    },
+    {
+      "name": "moneyAmount",
+      "type": ["null", "int"],
+      "doc": "Money amount employee earned",
+      "default": null
+    },
+    {
+      "name": "wageAmount",
+      "type": ["null", "int"],
+      "doc": "Employee's wage",
+      "default": null
+    },
+    {
+      "name": "applyDate",
+      "type": ["null", "string"],
+      "doc": "Application date of paycheck",
+      "default": null
+    },
+    {
+      "name": "adjustedApplyDate",
+      "type": "string",
+      "doc": "Adjusted application date of paycheck"
+    },
+    {
+      "name": "startDTM",
+      "type": ["null", "string"],
+      "doc": "Data time month start",
+      "default": null
+    },
+    {
+      "name": "endDTM",
+      "type": ["null", "string"],
+      "doc": "Date time month end",
+      "default": null
+    },
+    {
+      "name": "homeAccountSW",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating this is employee's home account",
+      "default": null
+    },
+    {
+      "name": "currPayPeriodStart",
+      "type": ["null", "string"],
+      "doc": "Current pay period start date time",
+      "default": null
+    },
+    {
+      "name": "currPayPeriodEnd",
+      "type": ["null", "string"],
+      "doc": "Current pay period end date time",
+      "default": null
+    },
+    {
+      "name": "prevPayPeriodStart",
+      "type": ["null", "string"],
+      "doc": "Previous pay period start date time",
+      "default": null
+    },
+    {
+      "name": "prevPayPeriodEnd",
+      "type": ["null", "string"],
+      "doc": "Previous pay period end date time",
+      "default": null
+    },
+    {
+      "name": "nextPayPeriodStart",
+      "type": ["null", "string"],
+      "doc": "Next pay period start date time",
+      "default": null
+    },
+    {
+      "name": "nextPayPeriodEnd",
+      "type": ["null", "string"],
+      "doc": "Next pay period end date time",
+      "default": null
+    },
+    {
+      "name": "notPaidSW",
+      "type": "boolean",
+      "doc": "Flag indicating if employee has not been paid"
+    },
+    {
+      "name": "employeeIdentifier",
+      "type": "int",
+      "doc": "Employee ID"
+    },
+    {
+      "name": "paycodeIdentifier",
+      "type": "int",
+      "doc": "Employee's paycode ID"
+    },
+    {
+      "name": "childPayCodeIdentifier",
+      "type": "int",
+      "doc": "Child Pay code"
+    },
+    {
+      "name": "timeSheetItemIdentifier",
+      "type": "int",
+      "doc": "Item on time sheet"
+    },
+    {
+      "name": "wfcTotalIdentifier",
+      "type": "int",
+      "doc": "WFC total"
+    },
+    {
+      "name": "laborAcctIdentifier",
+      "type": "int",
+      "doc": "Unique code to identify labor account"
+    },
+    {
+      "name": "personIdentifier",
+      "type": "int",
+      "doc": "Unique code to identify person"
+    },
+    {
+      "name": "laborLevelDSC1",
+      "type": ["null", "string"],
+      "doc": "First labor level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC2",
+      "type": ["null", "string"],
+      "doc": "Second labor level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC3",
+      "type": ["null", "string"],
+      "doc": "Third level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC4",
+      "type": ["null", "string"],
+      "doc": "Fourth labor level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC5",
+      "type": ["null", "string"],
+      "doc": "Fifth labor level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC6",
+      "type": ["null", "string"],
+      "doc": "Sixth labor level description",
+      "default": null
+    },
+    {
+      "name": "laborLevelDSC7",
+      "type": ["null", "string"],
+      "doc": "Seventh labor level description",
+      "default": null
+    },
+    {
+      "name": "pcVisibleToUserSW",
+      "type": ["null", "boolean"],
+      "doc": "Flag inidcating if pay code is visible to user",
+      "default": null
+    },
+    {
+      "name": "addTotECTotSW",
+      "type": ["null", "boolean"],
+      "doc": "Flag indicating whether to add total EC Total",
+      "default": null
+    },
+    {
+      "name": "OrgPathTxt",
+      "type": ["null", "string"],
+      "doc": "Organization Path Text",
+      "default": null
+    },
+    {
+      "name": "OrgPathDscTxt",
+      "type": ["null", "string"],
+      "doc": "Organization Path Text Descritpion",
+      "default": null
+    },
+    {
+      "name": "displayOrderNum",
+      "type": ["null", "int"],
+      "doc": "Display order number",
+      "default": null
+    },
+    {
+      "name": "abbreviationPcChar",
+      "type": ["null", "string"],
+      "doc": "Abberviation pay code character",
+      "default": null
+    },
+    {
+      "name": "visibleInRptOptnSW",
+      "type": "boolean",
+      "doc": "Flag inidcating if optional report is visible"
+    },
+    {
+      "name": "timeInDays",
+      "type": ["null", "int"],
+      "doc": "Time in days",
+      "default": null
+    },
+    {
+      "name": "hourlyRate",
+      "type": ["null", "int"],
+      "doc": "Hourly rate of employee",
+      "default": null
+    },
+    {
+      "name": "accountApprovalNum",
+      "type": ["null", "int"],
+      "doc": "Account approval number",
+      "default": null
+    },
+    {
+      "name": "timeOffset",
+      "type": "string",
+      "doc": "Time difference in hours between the local timestamp and the coordinated universal timestamp (UTC)"
+    }
+  ]
+}

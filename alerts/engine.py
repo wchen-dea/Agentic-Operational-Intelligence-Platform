@@ -14,27 +14,31 @@ def detect_alerts(kpis: dict[str, dict[str, Any]], rules: dict[str, Any]) -> lis
             severity = rule.get("severity", "medium")
 
             if min_value is not None and value < min_value:
-                alerts.append({
-                    "store_id": store_id,
-                    "metric": metric,
-                    "value": value,
-                    "condition": f"below_min_{min_value}",
-                    "severity": severity,
-                    "unit": rule.get("unit", ""),
-                    "direction": rule.get("direction", ""),
-                    "description": rule.get("description", ""),
-                    "remediation": rule.get("remediation", ""),
-                })
+                alerts.append(
+                    {
+                        "store_id": store_id,
+                        "metric": metric,
+                        "value": value,
+                        "condition": f"below_min_{min_value}",
+                        "severity": severity,
+                        "unit": rule.get("unit", ""),
+                        "direction": rule.get("direction", ""),
+                        "description": rule.get("description", ""),
+                        "remediation": rule.get("remediation", ""),
+                    }
+                )
             if max_value is not None and value > max_value:
-                alerts.append({
-                    "store_id": store_id,
-                    "metric": metric,
-                    "value": value,
-                    "condition": f"above_max_{max_value}",
-                    "severity": severity,
-                    "unit": rule.get("unit", ""),
-                    "direction": rule.get("direction", ""),
-                    "description": rule.get("description", ""),
-                    "remediation": rule.get("remediation", ""),
-                })
+                alerts.append(
+                    {
+                        "store_id": store_id,
+                        "metric": metric,
+                        "value": value,
+                        "condition": f"above_max_{max_value}",
+                        "severity": severity,
+                        "unit": rule.get("unit", ""),
+                        "direction": rule.get("direction", ""),
+                        "description": rule.get("description", ""),
+                        "remediation": rule.get("remediation", ""),
+                    }
+                )
     return alerts

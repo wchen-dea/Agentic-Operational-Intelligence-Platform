@@ -5,6 +5,7 @@ from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
 
 def test_hybrid_search_valid_corpus():
     from config.settings import settings
+
     search = LocalHybridSearch(settings.rag_corpus_path)
     results = search.search("promotion strategy", top_k=2)
     assert len(results) > 0

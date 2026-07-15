@@ -1,0 +1,98 @@
+from pyflink.table import Schema, DataTypes
+from data_platform.flink_jobs.vehicle_inspection.data_types import get_tire_inspection_details
+
+
+def consumer_vtv_canonical_schema_builder():
+    return (
+        Schema.new_builder()
+        .column("kafkaKey", DataTypes.STRING().not_null())
+        .column("inspectionIdentifier", DataTypes.STRING().not_null())
+        .column("customerIdentifier", DataTypes.STRING().not_null())
+        .column("DOTCommunicationOptInIndicator", DataTypes.BOOLEAN())
+        .column("VIN", DataTypes.STRING())
+        .column("vehicleLicensePlateNumber", DataTypes.STRING())
+        .column("inspectionLocation", DataTypes.STRING())
+        .column("storeCode", DataTypes.STRING())
+        .column("siteNumber", DataTypes.STRING().not_null())
+        .column("createWorkerIdentifier", DataTypes.STRING())
+        .column("createBySourceName", DataTypes.STRING().not_null())
+        .column("createTimestamp", DataTypes.STRING().not_null())
+        .column("lastUpdateTimestamp", DataTypes.STRING())
+        .column("inspectionComments", DataTypes.STRING())
+        .column("vehicleCondition", DataTypes.STRING())
+        .column("mileageReading", DataTypes.INT())
+        .column("kilometerReading", DataTypes.INT())
+        .column("rotationPattern", DataTypes.STRING())
+        .column("TPMSStatus", DataTypes.STRING())
+        .column("wheelLockIndicator", DataTypes.BOOLEAN())
+        .column("vehicleIdentifier", DataTypes.STRING())
+        .column("originalReasonCode", DataTypes.STRING())
+        .column("trimIdentifier", DataTypes.STRING())
+        .column("assemblyIdentifier", DataTypes.STRING())
+        .column("spareInUseIndicator", DataTypes.BOOLEAN())
+        .column("carryOutIndicator", DataTypes.BOOLEAN())
+        .column("replaceAllTiresIndicator", DataTypes.BOOLEAN())
+        .column("vehicleMake", DataTypes.STRING())
+        .column("vehicleModel", DataTypes.STRING())
+        .column("replaceAllWheelsIndicator", DataTypes.BOOLEAN())
+        .column("vehicleYear", DataTypes.STRING())
+        .column("timeOffset", DataTypes.STRING())
+        .column("tireInspectionDetails", get_tire_inspection_details())
+        .build()
+    )
+
+
+def producer_inspection_schema_builder():
+    return (
+        Schema.new_builder()
+        .column("kafkaKey", DataTypes.STRING().not_null())
+        .column("inspectionIdentifier", DataTypes.STRING().not_null())
+        .column("customerIdentifier", DataTypes.STRING().not_null())
+        .column("dotCommunicationOptInIndicator", DataTypes.BOOLEAN())
+        .column("vin", DataTypes.STRING())
+        .column("vehicleLicensePlateNumber", DataTypes.STRING())
+        .column("inspectionLocation", DataTypes.STRING())
+        .column("storeCode", DataTypes.STRING())
+        .column("siteNumber", DataTypes.STRING().not_null())
+        .column("createWorkerIdentifier", DataTypes.STRING())
+        .column("createBySourceName", DataTypes.STRING().not_null())
+        .column("createTimestamp", DataTypes.STRING().not_null())
+        .column("lastModifyTimestamp", DataTypes.STRING())
+        .column("mileageReading", DataTypes.INT())
+        .column("rotationPattern", DataTypes.STRING())
+        .column("tpmsStatus", DataTypes.STRING())
+        .column("vehicleIdentifier", DataTypes.STRING())
+        .column("originalReasonCode", DataTypes.STRING())
+        .column("vehicleYear", DataTypes.STRING())
+        .column("vehicleMake", DataTypes.STRING())
+        .column("vehicleModel", DataTypes.STRING())
+        .column("timeOffset", DataTypes.STRING())
+        .build()
+    )
+
+
+def producer_detail_schema_builder():
+    return (
+        Schema.new_builder()
+        .column("kafkaKey", DataTypes.STRING().not_null())
+        .column("inspectionIdentifier", DataTypes.STRING().not_null())
+        .column("tirePositionCode", DataTypes.STRING().not_null())
+        .column("dotNumber", DataTypes.STRING())
+        .column("recallIndicator", DataTypes.BOOLEAN())
+        .column("tireServicesPerformed", DataTypes.STRING())
+        .column("tireAge", DataTypes.DOUBLE())
+        .column("tireStatus", DataTypes.STRING())
+        .build()
+    )
+
+
+def producer_measurement_schema_builder():
+    return (
+        Schema.new_builder()
+        .column("kafkaKey", DataTypes.STRING().not_null())
+        .column("inspectionIdentifier", DataTypes.STRING().not_null())
+        .column("tirePositionCode", DataTypes.STRING().not_null())
+        .column("measurementLocation", DataTypes.STRING().not_null())
+        .column("measurementValue", DataTypes.FLOAT())
+        .build()
+    )

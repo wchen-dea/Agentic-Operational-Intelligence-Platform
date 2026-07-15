@@ -1,4 +1,4 @@
-"""Model Context Protocol (MCP) server — exposes platform tools and resources.
+"""Model Context Protocol (MCP) server - exposes platform tools and resources.
 
 Any MCP-compatible client (Claude Desktop, VS Code Copilot, etc.) can connect
 to this server and invoke the platform's skills, query KPIs, and search the
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "Agentic Operational Intelligence Platform",
-    description="Retail operational intelligence — KPIs, alerts, knowledge base, and diagnostics.",
+    description="Retail operational intelligence - KPIs, alerts, knowledge base, and diagnostics.",
 )
 
 # ---------------------------------------------------------------------------
@@ -67,11 +67,14 @@ def get_enriched_kpis(store_id: str) -> str:
     if not raw:
         return json.dumps({"error": f"No data found for store {store_id}"})
     snapshot = enrich_kpis(raw)
-    return json.dumps({
-        "store_id": snapshot.store_id,
-        "records": [r.to_dict() for r in snapshot.records],
-        "anomalies": [r.name for r in snapshot.anomalous_records],
-    }, indent=2)
+    return json.dumps(
+        {
+            "store_id": snapshot.store_id,
+            "records": [r.to_dict() for r in snapshot.records],
+            "anomalies": [r.name for r in snapshot.anomalous_records],
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -119,6 +122,7 @@ def kpi_catalog_resource() -> str:
 def threshold_rules_resource() -> str:
     """Current alert threshold rules with severity and remediation guidance."""
     from ai_layer.agents.tools.alert_tool import load_rules
+
     rules = load_rules(settings.alert_rules_path)
     return json.dumps(rules, indent=2)
 

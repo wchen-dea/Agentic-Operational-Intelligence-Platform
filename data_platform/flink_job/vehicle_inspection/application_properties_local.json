@@ -1,0 +1,50 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "vtv.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalTrendwellVehivleInspection",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-vtv-v1",
+      "table.name": "kafka_src_vehicle_inspection"
+    }
+  },
+  {
+    "PropertyGroupId": "vehicle.inspection",
+    "PropertyMap": {
+      "topic.name": "SinkVehicleInspection",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_vehicle_inspection"
+    }
+  },
+  {
+    "PropertyGroupId": "vehicle.detail",
+    "PropertyMap": {
+      "topic.name": "SinkVehicleTireInspectionDetail",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_vehicle_tire_inspection_detail"
+    }
+  },
+  {
+    "PropertyGroupId": "vehicle.measurement",
+    "PropertyMap": {
+      "topic.name": "SinkVehicleTireInspectionMeasurement",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_vehicle_tire_inspection_measurement"
+    }
+  }
+]

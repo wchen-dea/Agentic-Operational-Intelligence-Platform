@@ -1,4 +1,4 @@
-"""Hybrid retrieval — combines ChromaDB vector search with TF-IDF keyword search.
+"""Hybrid retrieval - combines ChromaDB vector search with TF-IDF keyword search.
 
 Falls back to TF-IDF-only when ChromaDB is not available or the collection
 is empty.  Uses ChromaDB's built-in default embedding function.
@@ -17,7 +17,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# ChromaDB lazy init — optional at import time
+# ChromaDB lazy init - optional at import time
 # ---------------------------------------------------------------------------
 
 _chroma_available = False
@@ -32,22 +32,28 @@ except ImportError:
 class LocalHybridSearch:
     """Hybrid retriever that merges dense (ChromaDB) and sparse (TF-IDF) results.
 
-    On construction the JSONL corpus is loaded into both a ChromaDB ephemeral
-    collection (for semantic / embedding search) and a TF-IDF matrix (for
-    keyword search).  At query time both result sets are merged via reciprocal
-    rank fusion.
+    On construction the JSONL corpus is loaded into both a ChromaDB collection
+    (for semantic / embedding search) and a TF-IDF matrix (for keyword search).
+    At query time both result sets are merged via reciprocal rank fusion.
+
+    Args:
+        corpus_path: Path to a JSONL file where each line is a document dict
+            with at least ``{"id": ..., "text": ...}``.
+        persist_path: Directory path for ChromaDB on-disk persistence.  When
+            set, the collection survives process restarts and embeddings are not
+            recomputed on every cold start.  Leave ``None`` for the ephemeral
+            in-process store (dev / testing only).
     """
 
-    def __init__(self, corpus_path: str) -> None:
+    def __init__(self, corpus_path: str, persist_path: str | None = None) -> None:
         self.corpus_path = Path(corpus_path)
+        self.persist_path = persist_path
         self.docs = self._load_docs()
 
         # Sparse (TF-IDF)
         self.vectorizer = TfidfVectorizer(stop_words="english")
         if self.docs:
-            self.tfidf_matrix = self.vectorizer.fit_transform(
-                [d["text"] for d in self.docs]
-            )
+            self.tfidf_matrix = self.vectorizer.fit_transform([d["text"] for d in self.docs])
         else:
             self.tfidf_matrix = None
 
@@ -90,30 +96,62 @@ class LocalHybridSearch:
 
     def _init_chroma(self) -> None:
         try:
-            client = chromadb.Client()  # ephemeral in-process
+            if self.persist_path:
+                import os
+
+                os.makedirs(self.persist_path, exist_ok=True)
+                # PersistentClient: index survives restarts; embeddings are not
+                # recomputed if the collection already exists.
+                client = chromadb.PersistentClient(path=self.persist_path)
+                logger.info("ChromaDB using persistent store at %s", self.persist_path)
+            else:
+                # EphemeralClient: in-process only, rebuilt on every cold start.
+                client = chromadb.EphemeralClient()
+                logger.info("ChromaDB using ephemeral in-process store (set chroma_persist_path for persistence)")
+
             self._collection = client.get_or_create_collection(
                 name="rag_corpus",
                 metadata={"hnsw:space": "cosine"},
             )
-            # Upsert all documents (idempotent by ID)
+
+            # Only upsert documents that are not already indexed.
+            # For PersistentClient this avoids re-embedding on warm starts.
+            existing_ids: set[str] = set()
+            if self.persist_path:
+                try:
+                    existing_ids = set(self._collection.get(include=[])["ids"])
+                except Exception:
+                    pass
+
             ids = [d.get("id", str(i)) for i, d in enumerate(self.docs)]
-            documents = [d["text"] for d in self.docs]
-            metadatas = [
-                {
-                    k: (json.dumps(v) if isinstance(v, list) else str(v))
-                    for k, v in d.items()
-                    if k not in ("text",) and v is not None
-                }
-                for d in self.docs
-            ]
-            self._collection.upsert(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas,
-            )
-            logger.info(
-                "ChromaDB collection loaded with %d documents", len(self.docs)
-            )
+            new_indices = [i for i, doc_id in enumerate(ids) if doc_id not in existing_ids]
+
+            if new_indices:
+                new_ids = [ids[i] for i in new_indices]
+                new_docs = [self.docs[i]["text"] for i in new_indices]
+                new_metas = [
+                    {
+                        k: (json.dumps(v) if isinstance(v, list) else str(v))
+                        for k, v in self.docs[i].items()
+                        if k not in ("text",) and v is not None
+                    }
+                    for i in new_indices
+                ]
+                self._collection.upsert(
+                    ids=new_ids,
+                    documents=new_docs,
+                    metadatas=new_metas,
+                )
+                logger.info(
+                    "ChromaDB upserted %d new / %d existing documents",
+                    len(new_indices),
+                    len(existing_ids),
+                )
+            else:
+                logger.info(
+                    "ChromaDB: all %d documents already indexed - skipping upsert",
+                    len(self.docs),
+                )
         except Exception as exc:
             logger.warning("ChromaDB init failed, using TF-IDF only: %s", exc)
             self._collection = None
@@ -143,14 +181,12 @@ class LocalHybridSearch:
             ids = results.get("ids", [[]])[0]
             distances = results.get("distances", [[]])[0]
             # Map IDs back to doc indices
-            id_to_idx = {
-                d.get("id", str(i)): i for i, d in enumerate(self.docs)
-            }
+            id_to_idx = {d.get("id", str(i)): i for i, d in enumerate(self.docs)}
             pairs: list[tuple[int, float]] = []
             for doc_id, dist in zip(ids, distances):
                 idx = id_to_idx.get(doc_id)
                 if idx is not None:
-                    # ChromaDB cosine distance → similarity
+                    # ChromaDB cosine distance -> similarity
                     score = max(0.0, 1.0 - dist)
                     pairs.append((idx, score))
             return pairs

@@ -1,0 +1,34 @@
+project: aoip_feature_store
+registry: s3a://warehouse/feast/registry.db
+provider: local
+# ---------------------------------------------------------------------------
+# Offline store — reads from Iceberg analytics layer via Spark
+# ---------------------------------------------------------------------------
+offline_store:
+  type: spark
+  spark_conf:
+    spark.master: "spark://spark-master:7077"
+    spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+    spark.sql.catalog.iceberg: "org.apache.iceberg.spark.SparkCatalog"
+    spark.sql.catalog.iceberg.type: "rest"
+    spark.sql.catalog.iceberg.uri: "http://iceberg-rest:8181"
+    spark.sql.catalog.iceberg.io-impl: "org.apache.iceberg.aws.s3.S3FileIO"
+    spark.sql.catalog.iceberg.s3.endpoint: "http://minio:9000"
+    spark.sql.catalog.iceberg.s3.path-style-access: "true"
+    spark.sql.catalog.iceberg.warehouse: "s3a://warehouse/"
+    spark.hadoop.fs.s3a.endpoint: "http://minio:9000"
+    spark.hadoop.fs.s3a.access.key: "minioadmin"
+    spark.hadoop.fs.s3a.secret.key: "minioadmin"
+    spark.hadoop.fs.s3a.path.style.access: "true"
+# ---------------------------------------------------------------------------
+# Online store — Redis for low-latency feature serving
+# ---------------------------------------------------------------------------
+online_store:
+  type: redis
+  connection_string: "redis://redis:6379/1"
+# ---------------------------------------------------------------------------
+# Entity and feature timestamps
+# ---------------------------------------------------------------------------
+entity_key_serialization_version: 2
+flags:
+  alpha_features: true

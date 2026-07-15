@@ -1,0 +1,36 @@
+version: 2
+models:
+- name: feat_store_performance
+  description: >
+    Per-store ML feature table built from gold KPIs. Adds rolling windows (7d, 28d), WoW/MoM growth rates, volatility, and ratio signals for revenue forecasting, anomaly detection, and store health scoring.
+
+  columns:
+  - name: store_id
+    tests: [not_null]
+  - name: kpi_date
+    tests: [not_null]
+  - name: revenue_7d_avg
+    description: 7-day rolling average of daily revenue
+  - name: revenue_wow_growth
+    description: "Week-over-week revenue growth rate (-1 to +∞)"
+  - name: show_rate_delta_vs_7d
+    description: Today's appointment show rate minus 7-day rolling average
+  - name: overdue_rate
+    description: Fraction of work orders that are overdue (0–1)
+  - name: reorder_pressure_rate
+    description: Fraction of SKUs needing reorder (0–1)
+- name: feat_customer_behavior
+  description: >
+    Customer-grain RFM feature table for churn prediction and LTV modeling. Aggregates purchase recency/frequency/monetary signals, appointment behavior, and invoice/refund history into a single feature row per customer.
+
+  columns:
+  - name: customer_id
+    tests: [unique, not_null]
+  - name: purchase_frequency_band
+    tests:
+    - accepted_values:
+        values: ['high', 'medium', 'low', 'none']
+  - name: churn_risk_band
+    tests:
+    - accepted_values:
+        values: ['high', 'medium', 'low']

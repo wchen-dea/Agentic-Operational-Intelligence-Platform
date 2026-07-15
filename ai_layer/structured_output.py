@@ -1,4 +1,4 @@
-"""Structured LLM output — Pydantic-validated responses from the LLM.
+"""Structured LLM output - Pydantic-validated responses from the LLM.
 
 Provides typed response models and a ``generate_structured`` function that
 constrains the LLM to output JSON conforming to a Pydantic schema.  Uses
@@ -22,11 +22,13 @@ T = TypeVar("T", bound=BaseModel)
 
 
 # ---------------------------------------------------------------------------
-# Response models — typed alternatives to free-form text
+# Response models - typed alternatives to free-form text
 # ---------------------------------------------------------------------------
+
 
 class KPIInsight(BaseModel):
     """A single insight about a KPI metric."""
+
     metric: str
     value: float
     status: str  # "healthy", "warning", "critical"
@@ -36,6 +38,7 @@ class KPIInsight(BaseModel):
 
 class OperationalBriefResponse(BaseModel):
     """Structured operational brief returned by the LLM."""
+
     summary: str
     key_findings: list[KPIInsight]
     priority_actions: list[str]
@@ -45,6 +48,7 @@ class OperationalBriefResponse(BaseModel):
 
 class AnomalyDiagnosisResponse(BaseModel):
     """Structured anomaly diagnosis."""
+
     anomaly_summary: str
     root_causes: list[str]
     affected_kpis: list[str]
@@ -54,6 +58,7 @@ class AnomalyDiagnosisResponse(BaseModel):
 
 class PromotionRecommendation(BaseModel):
     """Structured promotion recommendation."""
+
     recommendation: str
     rationale: str
     expected_impact: str
@@ -64,6 +69,7 @@ class PromotionRecommendation(BaseModel):
 # ---------------------------------------------------------------------------
 # Structured generation via tool_use
 # ---------------------------------------------------------------------------
+
 
 def _pydantic_to_tool_schema(model: type[BaseModel], name: str, description: str) -> dict[str, Any]:
     """Convert a Pydantic model to an Anthropic tool definition."""
@@ -131,8 +137,10 @@ def generate_structured(
         inp, out = _extract_usage(response)
 
         usage = LLMUsage(
-            input_tokens=inp, output_tokens=out,
-            cache_hit=False, duration_ms=duration,
+            input_tokens=inp,
+            output_tokens=out,
+            cache_hit=False,
+            duration_ms=duration,
         )
         _session_usage.append(usage)
 
@@ -162,6 +170,7 @@ def parse_llm_json(text: str, response_model: type[T]) -> T:
     """
     # Try to extract JSON from markdown code blocks
     import re
+
     json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
     if json_match:
         json_str = json_match.group(1)
@@ -170,7 +179,7 @@ def parse_llm_json(text: str, response_model: type[T]) -> T:
         brace_start = text.find("{")
         brace_end = text.rfind("}")
         if brace_start >= 0 and brace_end > brace_start:
-            json_str = text[brace_start:brace_end + 1]
+            json_str = text[brace_start : brace_end + 1]
         else:
             raise ValueError("No JSON found in LLM output.")
 

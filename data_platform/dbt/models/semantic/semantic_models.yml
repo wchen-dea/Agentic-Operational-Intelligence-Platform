@@ -1,0 +1,148 @@
+version: 2
+# ---------------------------------------------------------------------------
+# dbt Semantic Layer — MetricFlow metric definitions
+#
+# These definitions expose business metrics as queryable, reusable entities.
+# They power:
+#   - Natural-language metric queries via the AI agent (semantic_search skill)
+#   - Consistent metric definitions across dbt, BI tools, and the AI layer
+#   - Dimension-aware aggregations (by store, date, region)
+#
+# Tools: dbt sl query --metrics <metric_name> --group-by <dimension>
+# ---------------------------------------------------------------------------
+semantic_models:
+- name: store_kpis
+  description: >
+    Semantic model over the gold store KPI table. Exposes all per-store daily KPI metrics with time-series and cross-store dimension support.
+
+  model: ref('gold_store_kpis')
+  defaults:
+    agg_time_dimension: kpi_date
+  entities:
+  - name: store
+    type: primary
+    expr: store_id
+  dimensions:
+  - name: kpi_date
+    type: time
+    type_params:
+      time_granularity: day
+  - name: store_id
+    type: categorical
+  measures:
+  # Revenue
+  - name: total_revenue
+    agg: sum
+    expr: revenue_total
+  - name: order_count
+    agg: sum
+    expr: order_count
+  - name: avg_order_value
+    agg: average
+    expr: avg_order_value
+  - name: total_discounts
+    agg: sum
+    expr: discount_total
+  # Appointments
+  - name: appointment_count
+    agg: sum
+    expr: appointment_count
+  - name: appointment_show_count
+    agg: sum
+    expr: appointment_show_count
+  - name: appt_to_order_count
+    agg: sum
+    expr: appt_to_order_count
+  # Invoices
+  - name: invoice_total
+    agg: sum
+    expr: invoice_total
+  - name: net_revenue
+    agg: sum
+    expr: net_revenue
+  - name: refund_total
+    agg: sum
+    expr: refund_total
+  # Work orders
+  - name: work_order_count
+    agg: sum
+    expr: work_order_count
+  - name: overdue_work_order_count
+    agg: sum
+    expr: overdue_work_order_count
+  # Inventory
+  - name: sku_count
+    agg: max
+    expr: sku_count
+  - name: in_stock_sku_count
+    agg: max
+    expr: in_stock_sku_count
+  - name: total_inventory_value
+    agg: sum
+    expr: total_inventory_value
+  - name: needs_reorder_count
+    agg: max
+    expr: needs_reorder_count
+metrics:
+# ── Revenue metrics ───────────────────────────────────────────────────────
+- name: revenue_total
+  label: "Total Revenue"
+  description: Sum of all completed sales order revenue per store per day.
+  type: simple
+  type_params:
+    measure: total_revenue
+- name: average_order_value
+  label: "Average Order Value"
+  description: Average revenue per completed sales order.
+  type: simple
+  type_params:
+    measure: avg_order_value
+- name: appointment_show_rate
+  label: "Appointment Show Rate"
+  description: Percentage of scheduled appointments where the customer showed up.
+  type: ratio
+  type_params:
+    numerator: appointment_show_count
+    denominator: appointment_count
+- name: appointment_conversion_rate
+  label: "Appointment-to-Order Conversion Rate"
+  description: Percentage of showed appointments that converted to a sales order.
+  type: ratio
+  type_params:
+    numerator: appt_to_order_count
+    denominator: appointment_show_count
+- name: refund_rate
+  label: "Invoice Refund Rate"
+  description: Percentage of invoiced revenue that was refunded.
+  type: ratio
+  type_params:
+    numerator: refund_total
+    denominator: invoice_total
+- name: overdue_work_order_rate
+  label: "Overdue Work Order Rate"
+  description: Fraction of work orders that are past their due date and still open.
+  type: ratio
+  type_params:
+    numerator: overdue_work_order_count
+    denominator: work_order_count
+- name: in_stock_rate
+  label: "In-Stock Rate"
+  description: Percentage of SKUs that have at least one unit available.
+  type: ratio
+  type_params:
+    numerator: in_stock_sku_count
+    denominator: sku_count
+- name: revenue_7d_cumulative
+  label: "7-Day Cumulative Revenue"
+  description: Rolling 7-day sum of daily revenue per store.
+  type: cumulative
+  type_params:
+    measure: total_revenue
+    window: 7 days
+- name: revenue_28d_cumulative
+  label: "28-Day Cumulative Revenue"
+  description: Rolling 28-day sum of daily revenue per store.
+  type: cumulative
+  type_params:
+    measure: total_revenue
+    window: 28 days

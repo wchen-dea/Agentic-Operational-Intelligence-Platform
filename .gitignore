@@ -4,8 +4,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
-dist/
+# Build artifacts
+target/
 build/
+dist/
 
 # Environment
 .env
@@ -23,6 +25,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+dbt.log
+
+# Ruff cache
+.ruff_cache/
 
 # uv
 .local/
@@ -34,7 +41,13 @@ container/tmp/
 .coverage
 htmlcov/
 .pytest_cache/
+coverage.xml
+
+# dbt artifacts
+data_platform/dbt/target/
+data_platform/dbt/dbt_packages/
 
 # Misc
 *.bak
 *.tmp
+.env.yaml

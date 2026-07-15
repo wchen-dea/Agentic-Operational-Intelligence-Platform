@@ -5,7 +5,7 @@ ease of tuning, and single-source-of-truth management.
 
 LLMOps features:
 - Semantic versioning per prompt template
-- Lifecycle states (draft → active → deprecated → retired)
+- Lifecycle states (draft -> active -> deprecated -> retired)
 - A/B variant support for prompt experimentation
 - Programmatic lookup by name + version
 """
@@ -118,6 +118,18 @@ PROMOTION_STRATEGY = PromptTemplate(
     lifecycle=PromptLifecycle.ACTIVE,
 )
 
+# Concise variant - optimised for lower token cost in the A/B experiment
+OPERATIONAL_BRIEF_CONCISE = PromptTemplate(
+    system=(
+        "You are a retail ops AI. Produce a 3-bullet action brief from the readout below. "
+        "Lead with the highest-impact action. Tailor to the persona."
+    ),
+    user=("Persona: {persona}\nReadout: {readout}\nOutput 3 priority actions only."),
+    version="1.0.0",
+    lifecycle=PromptLifecycle.ACTIVE,
+    variant="concise",
+)
+
 # ---------------------------------------------------------------------------
 # Versioned registry with variant support
 # ---------------------------------------------------------------------------
@@ -127,13 +139,13 @@ class PromptRegistry:
     """Manages prompt templates with versioning, lifecycle, and A/B variant selection.
 
     Full runtime API:
-    - ``register(name, template)`` — add a prompt
-    - ``get(name, version, variant)`` — retrieve by name (latest active if no version)
-    - ``deprecate(name, version, variant)`` — mark a version deprecated
-    - ``retire(name, version, variant)`` — mark a version retired (hidden from ``get()``)
-    - ``list_prompts(**filters)`` — list with optional lifecycle/variant filters
-    - ``names()`` — unique prompt names
-    - ``versions(name)`` — versions available for a prompt
+    - ``register(name, template)`` - add a prompt
+    - ``get(name, version, variant)`` - retrieve by name (latest active if no version)
+    - ``deprecate(name, version, variant)`` - mark a version deprecated
+    - ``retire(name, version, variant)`` - mark a version retired (hidden from ``get()``)
+    - ``list_prompts(**filters)`` - list with optional lifecycle/variant filters
+    - ``names()`` - unique prompt names
+    - ``versions(name)`` - versions available for a prompt
     """
 
     def __init__(self) -> None:
@@ -158,10 +170,7 @@ class PromptRegistry:
             return self._store[key]
 
         # Find latest active version for this name + variant
-        candidates = [
-            (k, t) for k, t in self._store.items()
-            if k[0] == name and k[2] == variant and t.is_usable
-        ]
+        candidates = [(k, t) for k, t in self._store.items() if k[0] == name and k[2] == variant and t.is_usable]
         if not candidates:
             raise KeyError(f"No active prompt found for '{name}' variant='{variant}'.")
         # Sort by version descending (semantic)
@@ -180,9 +189,14 @@ class PromptRegistry:
                 continue
             if variant is not None and k[2] != variant:
                 continue
-            results.append({
-                "name": k[0], "version": k[1], "variant": k[2], "lifecycle": t.lifecycle.value,
-            })
+            results.append(
+                {
+                    "name": k[0],
+                    "version": k[1],
+                    "variant": k[2],
+                    "lifecycle": t.lifecycle.value,
+                }
+            )
         return results
 
     def names(self) -> list[str]:
@@ -206,7 +220,11 @@ class PromptRegistry:
         self._set_lifecycle(name, version, variant, PromptLifecycle.RETIRED)
 
     def _set_lifecycle(
-        self, name: str, version: str, variant: str, lifecycle: PromptLifecycle,
+        self,
+        name: str,
+        version: str,
+        variant: str,
+        lifecycle: PromptLifecycle,
     ) -> None:
         key = (name, version, variant)
         if key not in self._store:
@@ -239,6 +257,7 @@ def _version_tuple(version: str) -> tuple[int, ...]:
 
 registry = PromptRegistry()
 registry.register("operational_brief", OPERATIONAL_BRIEF)
+registry.register("operational_brief", OPERATIONAL_BRIEF_CONCISE)
 registry.register("kpi_explanation", KPI_EXPLANATION)
 registry.register("anomaly_diagnosis", ANOMALY_DIAGNOSIS)
 registry.register("promotion_strategy", PROMOTION_STRATEGY)
@@ -247,3 +266,26 @@ registry.register("promotion_strategy", PROMOTION_STRATEGY)
 def get_prompt(name: str, version: str | None = None, variant: str = "default") -> PromptTemplate:
     """Retrieve a prompt template by name (with optional version/variant)."""
     return registry.get(name, version=version, variant=variant)
+
+
+def get_prompt_with_experiment(
+    name: str,
+    session_id: str | None = None,
+) -> tuple[PromptTemplate, str]:
+    """Return ``(template, variant)`` after consulting the ExperimentManager.
+
+    The ExperimentManager performs deterministic sticky variant assignment
+    based on ``session_id``.  When no experiment is active for ``name``,
+    the 'default' variant is returned.
+    """
+    from ai_layer.experimentation import get_experiment_manager
+
+    mgr = get_experiment_manager()
+    variant = mgr.assign_variant(name, session_id=session_id or "anonymous")
+    try:
+        template = registry.get(name, variant=variant)
+    except KeyError:
+        # Variant not registered - fall back to default
+        template = registry.get(name, variant="default")
+        variant = "default"
+    return template, variant

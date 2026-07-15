@@ -1,4 +1,4 @@
-"""Default skill registry — pre-loaded with all platform skills."""
+"""Default skill registry - pre-loaded with all platform skills."""
 
 from functools import lru_cache
 

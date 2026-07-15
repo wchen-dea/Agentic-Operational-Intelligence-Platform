@@ -1,0 +1,40 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "appointment.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalSalesforceCrmAppointment",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-appointment-v1",
+      "table.name": "kafka_src_appointment"
+    }
+  },
+  {
+    "PropertyGroupId": "appointment",
+    "PropertyMap": {
+      "topic.name": "SinkAppointment",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_appointment"
+    }
+  },
+  {
+    "PropertyGroupId": "appointment.slot.reservation",
+    "PropertyMap": {
+      "topic.name": "SinkAppointmentSlotReservation",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_appointment_slot_reservation"
+    }
+  }
+]

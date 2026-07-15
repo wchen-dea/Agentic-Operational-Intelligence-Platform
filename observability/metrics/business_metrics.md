@@ -1,8 +1,6 @@
-# Business Metrics to Instrument
+# Business Metrics
 
-Target status: `agentic-operational-intelligence-platform`
-
-These metrics validate whether the platform is improving real-time decisions for store managers and executives. All metrics below are emittable via the `MetricsCollector` singleton and exported in Prometheus exposition format at `GET /metrics`.
+All metrics below are emittable via the `MetricsCollector` singleton and exported in Prometheus exposition format at `GET /metrics`.
 
 ## Data freshness
 

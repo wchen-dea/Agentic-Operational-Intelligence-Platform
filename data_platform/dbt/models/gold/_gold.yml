@@ -1,0 +1,25 @@
+version: 2
+models:
+- name: gold_store_kpis
+  description: >
+    Per-store, per-day KPI aggregation built from all five silver tables. Rebuilt as a full table on each dbt run.
+
+    Metrics covered:
+
+      Revenue     — order_count, revenue_total, avg_order_value, discount_total
+      Appointments— appointment_count, show_count, show_rate_pct,
+                    appt_to_order_count, appt_conversion_rate_pct
+      Invoices    — invoice_count, invoice_total, net_revenue, refund_rate_pct
+      Work Orders — work_order_count, avg_cycle_time_minutes, overdue_count
+      Inventory   — sku_count, in_stock_rate_pct, inventory_value, needs_reorder_count
+  columns:
+  - name: store_id
+    tests: [not_null]
+  - name: kpi_date
+    tests: [not_null]
+  - name: order_count
+    tests: [not_null]
+  - name: revenue_total
+    tests: [not_null]
+  - name: updated_at
+    tests: [not_null]

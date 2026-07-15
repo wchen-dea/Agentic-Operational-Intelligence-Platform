@@ -1,4 +1,4 @@
-"""Central orchestrator brain — DAG-based agent execution with intent routing and retry/fallback."""
+"""Central orchestrator brain - DAG-based agent execution with intent routing and retry/fallback."""
 
 from functools import lru_cache
 import logging
@@ -11,16 +11,25 @@ from ai_layer.agents.promotion_agent import PromotionAgent
 from ai_layer.agents.recommendation_agent import RecommendationAgent
 from ai_layer.llm import reset_session_usage, get_session_cost_summary
 from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
-from ai_layer.context import HybridContextAssembler, SessionMemory, StreamingStateStore
+from ai_layer.context import HybridContextAssembler, build_streaming_store
+from ai_layer.memory.persistent_memory import PersistentSessionMemory
 from ai_layer.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
 from ai_layer.orchestration.router import IntentRouter
 from ai_layer.orchestration.executor import DAGExecutor, ExecutionTrace
 
 logger = logging.getLogger(__name__)
 
-# Module-level singletons for session state (shared across orchestrator instances)
-_session_memory = SessionMemory(max_turns=20)
-_streaming_store = StreamingStateStore(ttl_seconds=300.0)
+# Module-level singletons - shared across all Orchestrator instances within a process.
+# PersistentSessionMemory survives restarts via SQLite; RedisStreamingStateStore
+# is shared across replicas when AOIP_REDIS__URL is set.
+_session_memory = PersistentSessionMemory(
+    max_turns=50,
+    ttl_seconds=float(settings.redis.session_ttl_seconds),
+)
+_streaming_store = build_streaming_store(
+    redis_url=settings.redis.url,
+    ttl_seconds=settings.redis.ttl_seconds,
+)
 
 
 class Orchestrator:
@@ -31,11 +40,14 @@ class Orchestrator:
         self.anomaly_agent = AnomalyAgent(settings.alert_rules_path)
         self.promotion_agent = PromotionAgent()
         self.recommendation_agent = RecommendationAgent()
-        self.search = LocalHybridSearch(settings.rag_corpus_path)
+        self.search = LocalHybridSearch(
+            settings.rag_corpus_path,
+            persist_path=settings.chroma_persist_path,
+        )
         self.router = IntentRouter()
         self.executor = DAGExecutor(max_workers=4)
 
-        # Hybrid context assembler — merges streaming + retrieval + memory
+        # Hybrid context assembler - merges streaming + retrieval + memory
         self.context_assembler = HybridContextAssembler(
             streaming_store=_streaming_store,
             memory=_session_memory,
@@ -58,45 +70,55 @@ class Orchestrator:
         """
         dag = AgentDAG()
 
-        dag.add_node(AgentNode(
-            name="kpi",
-            run_fn=self._run_kpi,
-            retry_policy=RetryPolicy(max_retries=2, backoff_base_seconds=0.3),
-            fallback_fn=self._fallback_kpi,
-        ))
+        dag.add_node(
+            AgentNode(
+                name="kpi",
+                run_fn=self._run_kpi,
+                retry_policy=RetryPolicy(max_retries=2, backoff_base_seconds=0.3),
+                fallback_fn=self._fallback_kpi,
+            )
+        )
 
-        dag.add_node(AgentNode(
-            name="rag_search",
-            run_fn=self._run_rag_search,
-            retry_policy=RetryPolicy(max_retries=1, backoff_base_seconds=0.2),
-            fallback_fn=self._fallback_rag,
-            optional=True,
-        ))
+        dag.add_node(
+            AgentNode(
+                name="rag_search",
+                run_fn=self._run_rag_search,
+                retry_policy=RetryPolicy(max_retries=1, backoff_base_seconds=0.2),
+                fallback_fn=self._fallback_rag,
+                optional=True,
+            )
+        )
 
-        dag.add_node(AgentNode(
-            name="anomaly",
-            run_fn=self._run_anomaly,
-            depends_on=["kpi"],
-            retry_policy=RetryPolicy(max_retries=1),
-            optional=True,
-        ))
+        dag.add_node(
+            AgentNode(
+                name="anomaly",
+                run_fn=self._run_anomaly,
+                depends_on=["kpi"],
+                retry_policy=RetryPolicy(max_retries=1),
+                optional=True,
+            )
+        )
 
-        dag.add_node(AgentNode(
-            name="promotion",
-            run_fn=self._run_promotion,
-            depends_on=["kpi", "rag_search"],
-            retry_policy=RetryPolicy(max_retries=1),
-            optional=True,
-        ))
+        dag.add_node(
+            AgentNode(
+                name="promotion",
+                run_fn=self._run_promotion,
+                depends_on=["kpi", "rag_search"],
+                retry_policy=RetryPolicy(max_retries=1),
+                optional=True,
+            )
+        )
 
-        dag.add_node(AgentNode(
-            name="recommendation",
-            run_fn=self._run_recommendation,
-            depends_on=["kpi", "anomaly", "promotion", "rag_search"],
-            retry_policy=RetryPolicy(max_retries=1),
-            fallback_fn=self._fallback_recommendation,
-            optional=True,
-        ))
+        dag.add_node(
+            AgentNode(
+                name="recommendation",
+                run_fn=self._run_recommendation,
+                depends_on=["kpi", "anomaly", "promotion", "rag_search"],
+                retry_policy=RetryPolicy(max_retries=1),
+                fallback_fn=self._fallback_recommendation,
+                optional=True,
+            )
+        )
 
         return dag
 
@@ -204,17 +226,25 @@ class Orchestrator:
         operational_brief = None
         if "recommendation" in route.required_agents:
             operational_brief = self.recommendation_agent.build_operational_brief(
-                kpis, alerts, promotion, context_docs, persona=persona,
+                kpis,
+                alerts,
+                promotion,
+                context_docs,
+                persona=persona,
             )
 
         # Phase 5: Record conversation turn for multi-turn memory
         if session_id:
             self.session_memory.add_turn(
-                session_id, role="user", content=question,
+                session_id,
+                role="user",
+                content=question,
                 metadata={"store_id": store_id, "region": region, "persona": persona},
             )
             self.session_memory.add_turn(
-                session_id, role="assistant", content=answer_text or str(operational_brief),
+                session_id,
+                role="assistant",
+                content=answer_text or str(operational_brief),
                 metadata={"intent": route.intent.value},
             )
 

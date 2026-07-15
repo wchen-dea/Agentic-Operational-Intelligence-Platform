@@ -1,0 +1,569 @@
+{
+  "type": "record",
+  "name": "master",
+  "namespace": "com.canonicla.trendwell.vehivle",
+  "fields": [
+    {
+      "name": "vehicleIdentifier",
+      "type": "string",
+      "doc": "Master identifier given by SAP to describe generic vehicle matching that of the customer"
+    },
+    {
+      "name": "yearNumber",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "Model year of the vehicle",
+      "default": null
+    },
+    {
+      "name": "makeName",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "Vehicle Brand",
+      "default": null
+    },
+    {
+      "name": "modelName",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "Vehicle Model name",
+      "default": null
+    },
+    {
+      "name": "vehicleClassCode",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "Vehicle Classification (SUV, Sedan, etc.)",
+      "default": null
+    },
+    {
+      "name": "trims",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Trim",
+          "fields": [
+            {
+              "name": "trimIdentifier",
+              "type": "string",
+              "doc": "Unqiue identifer generated from SAP by the system to denote the version of the customer's vehicle model"
+            },
+            {
+              "name": "trimDescription",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Name associated with a package of accessories and options of a given car model",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor1Type",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Type1",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor1Name",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Description1 Short Text",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor2Type",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Type2",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor2Name",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Description2 Short Text",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor3Type",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Type3",
+              "default": null
+            },
+            {
+              "name": "trimDescriptor3Name",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Trim/Submodel Description3 Short Text",
+              "default": null
+            },
+            {
+              "name": "industryCode",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Unique code assigned to a vehicle by the manufacturer",
+              "default": null
+            },
+            {
+              "name": "deletedIndicator",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Indicates record is no longer active",
+              "default": null
+            },
+            {
+              "name": "segmentCategoryIdentifier",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Vehicle Segment Category ID",
+              "default": null
+            },
+            {
+              "name": "segmentCategoryDescription",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Vehicle Segment Category Description",
+              "default": null
+            },
+            {
+              "name": "chassisIdentifier",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Chassis unique record identifier generated from SAP to denote vehicle's chassis",
+              "default": null
+            },
+            {
+              "name": "spareTire",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Indicator whether chassis has a spare tire",
+              "default": null
+            },
+            {
+              "name": "lugTorque",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Lug nut tightness",
+              "default": null
+            },
+            {
+              "name": "lugType",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Shape of lugnut (Conical, spherical, flat seat, etc.)",
+              "default": null
+            },
+            {
+              "name": "lugDescription",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Brief description of lug nut",
+              "default": null
+            },
+            {
+              "name": "lugLength",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Measurement from top extremity of lug to the bottom, in milimeteres",
+              "default": null
+            },
+            {
+              "name": "pitch",
+              "type": [
+                "null",
+                "float"
+              ],
+              "doc": "The length from a point on one tread block to the same point on the next tread block",
+              "default": null
+            },
+            {
+              "name": "pitchUnitOfMeasure",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Unit used for measuring pitch",
+              "default": null
+            },
+            {
+              "name": "threadLength",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Measures the length of the bolts attached to the hub",
+              "default": null
+            },
+            {
+              "name": "threadDiameter",
+              "type": [
+                "null",
+                "float"
+              ],
+              "doc": "Measures the diameter of the bolts attached to the hub",
+              "default": null
+            },
+            {
+              "name": "threadUnitOfMeasure",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Unit of measurement for hub length and diameter",
+              "default": null
+            },
+            {
+              "name": "cavityBackedIndicator",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            },
+            {
+              "name": "driveIdentifier",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Unique record generated from SAP to denote drive of vehicle",
+              "default": null
+            },
+            {
+              "name": "driveType",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Front or Front/Back drive",
+              "default": null
+            },
+            {
+              "name": "driveDescription",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Brief description of drive capabilities",
+              "default": null
+            },
+            {
+              "name": "duallyIndicator",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Flag to indicate if car has dual wheel drive",
+              "default": null
+            },
+            {
+              "name": "tireRestriction",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "Any applicable tire regulations",
+              "default": null
+            },
+            {
+              "name": "assemblies",
+              "type": {
+                "type": "array",
+                "items": {
+                  "type": "record",
+                  "name": "Assembly",
+                  "fields": [
+                    {
+                      "name": "assemblyIdentifier",
+                      "type": "string",
+                      "doc": "Unique record ID generated by the system indicating vehicle's assembly code"
+                    },
+                    {
+                      "name": "assemblyAxleType",
+                      "type": "string",
+                      "doc": "Indicator if Axle type is F/B or R"
+                    },
+                    {
+                      "name": "crossSection",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measurement of a tire's linear width from sidewall to sidewall excluding any raised letters, ornamentation or protective ribs.",
+                      "default": null
+                    },
+                    {
+                      "name": "aspectRatio",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Aspect ratio of the tires",
+                      "default": null
+                    },
+                    {
+                      "name": "tireWheelRimDiameter",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measuremnt of tire's diameter",
+                      "default": null
+                    },
+                    {
+                      "name": "construction",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Load range",
+                      "default": null
+                    },
+                    {
+                      "name": "loadIndex",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "A value assigned to designate the maximum load (weight) a tire is designed for",
+                      "default": null
+                    },
+                    {
+                      "name": "speedRating",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Maximum reccomended speed of tire",
+                      "default": null
+                    },
+                    {
+                      "name": "wheelRimDiameter",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measuremnt of wheel's rim diameter",
+                      "default": null
+                    },
+                    {
+                      "name": "wheelWidth",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measurement of wheel's width",
+                      "default": null
+                    },
+                    {
+                      "name": "offset",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measurement of wheel's offset",
+                      "default": null
+                    },
+                    {
+                      "name": "wheelSeat",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Measurement of how wheel sits on tire",
+                      "default": null
+                    },
+                    {
+                      "name": "placardPSI",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Displays reccomended PSI preassure for tire",
+                      "default": null
+                    },
+                    {
+                      "name": "deletedIndicator",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "doc": "Indicates record is no longer active",
+                      "default": null
+                    },
+                    {
+                      "name": "axles",
+                      "type": {
+                        "type": "array",
+                        "items": {
+                          "type": "record",
+                          "name": "Axle",
+                          "fields": [
+                            {
+                              "name": "axleType",
+                              "type": "string",
+                              "doc": "Indicator if Axle type is F/B or R"
+                            },
+                            {
+                              "name": "numberOfBolts",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Quantity of Bolts in the axle",
+                              "default": null
+                            },
+                            {
+                              "name": "circleDiameter",
+                              "type": [
+                                "null",
+                                "float"
+                              ],
+                              "doc": "Diameter of the axle",
+                              "default": null
+                            },
+                            {
+                              "name": "loadCapacity",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "total load capacity of the axle",
+                              "default": null
+                            },
+                            {
+                              "name": "hubBore",
+                              "type": [
+                                "null",
+                                "float"
+                              ],
+                              "doc": "Hub bore value of axle",
+                              "default": null
+                            },
+                            {
+                              "name": "hubStepDiameter",
+                              "type": [
+                                "null",
+                                "float"
+                              ],
+                              "doc": "Axle hub step diameter",
+                              "default": null
+                            },
+                            {
+                              "name": "hubDepth",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Axle hub depth value",
+                              "default": null
+                            },
+                            {
+                              "name": "hubClearance",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Axle hub clearance",
+                              "default": null
+                            },
+                            {
+                              "name": "maxTireWidth",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Maximum tire width supported by axle",
+                              "default": null
+                            },
+                            {
+                              "name": "wheelTireHeightLimit",
+                              "type": [
+                                "null",
+                                "float"
+                              ],
+                              "doc": "Maximum wheel tire height supported by axle",
+                              "default": null
+                            },
+                            {
+                              "name": "minimumTireWheelDiameter",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Minimum tire wheel diameter supported by axle",
+                              "default": null
+                            },
+                            {
+                              "name": "deletedIndicator",
+                              "type": [
+                                "null",
+                                "string"
+                              ],
+                              "doc": "Indicates record is no longer active",
+                              "default": null
+                            }
+                          ]
+                        }
+                      },
+                      "doc": "Chassis_Axle is a collection of assemblies associated to a specific vehicle",
+                      "default": []
+                    }
+                  ]
+                }
+              },
+              "doc": "AssemblyArticle is a collection of articles associated to a specific assembly",
+              "default": []
+            }
+          ]
+        }
+      },
+      "doc": "Trim is a collection of trim levels associated to a specific vehicle",
+      "default": []
+    }
+  ]
+}

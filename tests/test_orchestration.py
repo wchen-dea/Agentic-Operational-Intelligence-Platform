@@ -87,11 +87,13 @@ class TestDAGExecutor:
             return "ok"
 
         dag = AgentDAG()
-        dag.add_node(AgentNode(
-            name="flaky",
-            run_fn=flaky,
-            retry_policy=RetryPolicy(max_retries=2, backoff_base_seconds=0.01),
-        ))
+        dag.add_node(
+            AgentNode(
+                name="flaky",
+                run_fn=flaky,
+                retry_policy=RetryPolicy(max_retries=2, backoff_base_seconds=0.01),
+            )
+        )
 
         executor = DAGExecutor()
         trace = executor.execute(dag, {})
@@ -100,12 +102,14 @@ class TestDAGExecutor:
 
     def test_fallback_on_exhausted_retries(self):
         dag = AgentDAG()
-        dag.add_node(AgentNode(
-            name="broken",
-            run_fn=lambda ctx: 1 / 0,
-            retry_policy=RetryPolicy(max_retries=0),
-            fallback_fn=lambda ctx, exc: "fallback_value",
-        ))
+        dag.add_node(
+            AgentNode(
+                name="broken",
+                run_fn=lambda ctx: 1 / 0,
+                retry_policy=RetryPolicy(max_retries=0),
+                fallback_fn=lambda ctx, exc: "fallback_value",
+            )
+        )
 
         executor = DAGExecutor()
         ctx: dict = {}
@@ -116,18 +120,22 @@ class TestDAGExecutor:
     def test_optional_node_failure_doesnt_abort(self):
         dag = AgentDAG()
         dag.add_node(AgentNode(name="required", run_fn=lambda ctx: "ok"))
-        dag.add_node(AgentNode(
-            name="optional_fail",
-            run_fn=lambda ctx: 1 / 0,
-            depends_on=["required"],
-            retry_policy=RetryPolicy(max_retries=0),
-            optional=True,
-        ))
-        dag.add_node(AgentNode(
-            name="after",
-            run_fn=lambda ctx: "still_runs",
-            depends_on=["required"],
-        ))
+        dag.add_node(
+            AgentNode(
+                name="optional_fail",
+                run_fn=lambda ctx: 1 / 0,
+                depends_on=["required"],
+                retry_policy=RetryPolicy(max_retries=0),
+                optional=True,
+            )
+        )
+        dag.add_node(
+            AgentNode(
+                name="after",
+                run_fn=lambda ctx: "still_runs",
+                depends_on=["required"],
+            )
+        )
 
         executor = DAGExecutor()
         ctx: dict = {}

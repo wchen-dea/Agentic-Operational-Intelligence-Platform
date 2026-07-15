@@ -1,0 +1,55 @@
+version: 2
+models:
+- name: bronze_sales_orders
+  description: >
+    Append-only CDC history for sales orders. Each row represents one Debezium event with the after/before payload flattened. Includes derived columns for cycle-time analytics.
+
+  columns:
+  - name: _cdc_op
+    description: "Debezium op: c=create, u=update, d=delete, r=snapshot"
+    tests: [not_null, {accepted_values: {values: ['c', 'u', 'd', 'r']}}]
+  - name: _cdc_ts_ms
+    description: Source event timestamp (epoch ms)
+    tests: [not_null]
+  - name: order_id
+    description: Business primary key (null only for malformed events)
+  - name: _ingested_at
+    tests: [not_null]
+- name: bronze_appointments
+  description: Append-only CDC history for appointments.
+  columns:
+  - name: _cdc_op
+    tests: [not_null]
+  - name: appointment_id
+    description: Business primary key
+  - name: _cdc_ts_ms
+    tests: [not_null]
+- name: bronze_pos_invoices
+  description: Append-only CDC history for POS invoices.
+  columns:
+  - name: _cdc_op
+    tests: [not_null]
+  - name: invoice_id
+    description: Business primary key
+  - name: _cdc_ts_ms
+    tests: [not_null]
+- name: bronze_work_orders
+  description: Append-only CDC history for work orders with derived cycle time.
+  columns:
+  - name: _cdc_op
+    tests: [not_null]
+  - name: work_order_id
+    description: Business primary key
+  - name: _cdc_ts_ms
+    tests: [not_null]
+- name: bronze_inventory_snapshots
+  description: Append-only CDC history for daily inventory snapshots.
+  columns:
+  - name: _cdc_op
+    tests: [not_null]
+  - name: snapshot_id
+    description: Surrogate primary key
+  - name: sku_id
+    description: SKU identifier (composite PK with store_id + snapshot_date)
+  - name: _cdc_ts_ms
+    tests: [not_null]

@@ -1,0 +1,30 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "site.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalKronosSite",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-site-v1",
+      "table.name": "kafka_src_site"
+    }
+  },
+  {
+    "PropertyGroupId": "site",
+    "PropertyMap": {
+      "topic.name": "SinkSite",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_site"
+    }
+  }
+]

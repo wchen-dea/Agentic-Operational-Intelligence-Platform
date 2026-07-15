@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 @lru_cache(maxsize=4)
 def load_rules(path: str) -> dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
             if not isinstance(data, dict):
                 logger.error("Alert rules at %s is not a valid dict", path)

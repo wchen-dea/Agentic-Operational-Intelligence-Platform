@@ -29,6 +29,7 @@ _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 # API key store (in-process; swap for DB/secrets manager in production)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class APIKeyRecord:
     """An API key with associated role and metadata."""
@@ -40,7 +41,7 @@ class APIKeyRecord:
     enabled: bool = True
 
 
-# Default keys for development — in production, load from env/DB
+# Default keys for development - in production, load from env/DB
 _DEFAULT_KEYS: dict[str, APIKeyRecord] = {}
 
 
@@ -76,7 +77,7 @@ def _lookup_key(raw_key: str) -> APIKeyRecord | None:
 # RBAC
 # ---------------------------------------------------------------------------
 
-# Role → allowed endpoint tags
+# Role -> allowed endpoint tags
 _ROLE_PERMISSIONS: dict[str, set[str]] = {
     "admin": {"query", "kpi", "alerts", "operations", "skills", "streaming", "observability"},
     "operator": {"query", "kpi", "alerts", "operations", "skills", "streaming"},
@@ -118,6 +119,7 @@ def _check_rate_limit(key_hash: str, limit_per_minute: int) -> bool:
 # FastAPI dependency
 # ---------------------------------------------------------------------------
 
+
 async def require_auth(
     request: Request,
     api_key: str | None = Security(_api_key_header),
@@ -152,7 +154,7 @@ async def require_auth(
             detail=f"Rate limit exceeded ({record.rate_limit_per_minute}/min)",
         )
 
-    # RBAC — check endpoint tags
+    # RBAC - check endpoint tags
     route = request.scope.get("route")
     tags = getattr(route, "tags", []) if route else []
     if not _check_rbac(record.role, tags):
@@ -165,8 +167,9 @@ async def require_auth(
 
 
 # ---------------------------------------------------------------------------
-# Initialization — register dev keys from environment
+# Initialization - register dev keys from environment
 # ---------------------------------------------------------------------------
+
 
 def init_auth_from_env() -> None:
     """Register API keys from environment variables.

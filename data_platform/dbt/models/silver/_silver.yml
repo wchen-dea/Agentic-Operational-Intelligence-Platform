@@ -1,0 +1,60 @@
+version: 2
+models:
+- name: silver_sales_orders
+  description: >
+    Current state of all sales orders. Applies Iceberg MERGE from bronze (upsert by order_id) and removes rows where _cdc_op = 'd' via post-hook.
+
+  columns:
+  - name: order_id
+    description: Business primary key
+    tests: [unique, not_null]
+  - name: store_id
+    tests: [not_null]
+  - name: total_amount
+    description: Gross order amount (before discounts/tax)
+  - name: _cdc_op
+    description: Last CDC operation applied to this row
+- name: silver_appointments
+  description: >
+    Current state of all appointments. Includes derived is_show flag (true = customer showed, false = no-show/cancelled, null = pending).
+
+  columns:
+  - name: appointment_id
+    tests: [unique, not_null]
+  - name: is_show
+    description: "Derived: true=shown, false=no-show/cancelled, null=pending"
+- name: silver_pos_invoices
+  description: >
+    Current state of all POS invoices. Includes derived net_revenue (total_amount minus refund_amount).
+
+  columns:
+  - name: invoice_id
+    tests: [unique, not_null]
+  - name: net_revenue
+    description: "Derived: total_amount - refund_amount"
+- name: silver_work_orders
+  description: >
+    Current state of all work orders with derived cycle_time_minutes and is_overdue flag.
+
+  columns:
+  - name: work_order_id
+    tests: [unique, not_null]
+  - name: cycle_time_minutes
+    description: Minutes from open to close (null if still open)
+  - name: is_overdue
+    description: "True if still open and past due_at"
+- name: silver_inventory_snapshots
+  description: >
+    Latest inventory snapshot per (sku_id, store_id, snapshot_date). Includes derived inventory_value and needs_reorder flag.
+
+  columns:
+  - name: sku_id
+    tests: [not_null]
+  - name: store_id
+    tests: [not_null]
+  - name: snapshot_date
+    tests: [not_null]
+  - name: inventory_value
+    description: "Derived: quantity_on_hand * unit_cost"
+  - name: needs_reorder
+    description: "Derived: quantity_available <= reorder_point"

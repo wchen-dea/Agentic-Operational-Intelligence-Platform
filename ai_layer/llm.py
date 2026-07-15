@@ -6,12 +6,13 @@ import logging
 import os
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
 import anthropic
 
+from ai_layer.model_router import TaskComplexity, get_model_router
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -19,12 +20,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LLMUsage:
-    """Token usage from a single LLM call."""
+    """Token usage and cost from a single LLM call."""
 
     input_tokens: int = 0
     output_tokens: int = 0
     cache_hit: bool = False
     duration_ms: float = 0.0
+    model_id: str = field(default="")
+    cost_input_per_m: float = field(default=3.0)  # $/M input tokens for this model
+    cost_output_per_m: float = field(default=15.0)  # $/M output tokens for this model
 
     @property
     def total_tokens(self) -> int:
@@ -32,11 +36,11 @@ class LLMUsage:
 
     @property
     def estimated_cost_usd(self) -> float:
-        """Estimate cost using Claude Sonnet pricing ($3/M input, $15/M output)."""
-        return (self.input_tokens * 3.0 + self.output_tokens * 15.0) / 1_000_000
+        """Estimate cost using per-model pricing from ModelRouter catalog."""
+        return (self.input_tokens * self.cost_input_per_m + self.output_tokens * self.cost_output_per_m) / 1_000_000
 
 
-# Module-level usage accumulator — reset per request or read via get_session_usage()
+# Module-level usage accumulator - reset per request or read via get_session_usage()
 _session_usage: list[LLMUsage] = []
 
 
@@ -68,8 +72,9 @@ def get_session_cost_summary() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Response cache — avoids re-calling the LLM for identical prompt+system pairs
+# Response cache - avoids re-calling the LLM for identical prompt+system pairs
 # ---------------------------------------------------------------------------
+
 
 class _LRUCache:
     """Simple LRU cache for LLM responses keyed by prompt hash."""
@@ -140,6 +145,8 @@ def generate(
     system: str | None = None,
     max_tokens: int | None = None,
     use_cache: bool = True,
+    complexity: TaskComplexity | None = None,
+    task_hint: str | None = None,
 ) -> str:
     """Generate text via the LLM with optional caching and token tracking.
 
@@ -148,8 +155,24 @@ def generate(
         system: Optional system prompt.
         max_tokens: Override the default max_tokens from settings.
         use_cache: If True, return cached response for identical prompts.
+        complexity: Task complexity used to select the optimal model via
+            ModelRouter (LOW->Haiku, MEDIUM->Sonnet, HIGH->Opus).  If None and
+            task_hint is also None, falls back to ``settings.llm.model``.
+        task_hint: Natural language description used to infer complexity when
+            ``complexity`` is not supplied explicitly.
     """
-    effective_max_tokens = max_tokens or settings.llm.max_tokens
+    router = get_model_router()
+    if complexity is not None or task_hint is not None:
+        spec = router.select(complexity=complexity, task_hint=task_hint)
+        model_id = spec.model_id
+        cost_in = spec.cost_input_per_m
+        cost_out = spec.cost_output_per_m
+        effective_max_tokens = max_tokens or spec.max_tokens
+    else:
+        model_id = settings.llm.model
+        cost_in = 3.0  # Sonnet default
+        cost_out = 15.0
+        effective_max_tokens = max_tokens or settings.llm.max_tokens
 
     # Check cache
     if use_cache:
@@ -162,6 +185,9 @@ def generate(
                 output_tokens=0,
                 cache_hit=True,
                 duration_ms=0.0,
+                model_id=original_usage.model_id,
+                cost_input_per_m=original_usage.cost_input_per_m,
+                cost_output_per_m=original_usage.cost_output_per_m,
             )
             _session_usage.append(cache_usage)
             logger.debug("LLM cache hit (saved ~%d tokens)", original_usage.total_tokens)
@@ -169,7 +195,7 @@ def generate(
 
     client = _get_client()
     kwargs: dict[str, Any] = {
-        "model": settings.llm.model,
+        "model": model_id,
         "max_tokens": effective_max_tokens,
         "temperature": settings.llm.temperature,
         "messages": [{"role": "user", "content": prompt}],
@@ -191,6 +217,9 @@ def generate(
             output_tokens=output_tokens,
             cache_hit=False,
             duration_ms=duration,
+            model_id=model_id,
+            cost_input_per_m=cost_in,
+            cost_output_per_m=cost_out,
         )
         _session_usage.append(usage)
 
@@ -200,14 +229,18 @@ def generate(
 
         logger.info(
             "LLM call: %d input + %d output tokens (%.1fms, ~$%.6f)",
-            input_tokens, output_tokens, duration, usage.estimated_cost_usd,
+            input_tokens,
+            output_tokens,
+            duration,
+            usage.estimated_cost_usd,
         )
         return text
     except anthropic.APIConnectionError as exc:
         logger.error("LLM connection error: %s", exc)
         raise
     except anthropic.RateLimitError as exc:
-        logger.warning("LLM rate limit hit: %s", exc)
+        logger.warning("LLM rate limit hit on model '%s': %s", model_id, exc)
+        get_model_router().mark_failed(model_id.split("-")[1] if "-" in model_id else model_id)
         raise
     except anthropic.APIStatusError as exc:
         logger.error("LLM API error (status=%d): %s", exc.status_code, exc.message)
@@ -313,7 +346,10 @@ def generate_with_image(
 
         logger.info(
             "LLM vision call: %d input + %d output tokens (%.1fms, ~$%.6f)",
-            input_tokens, output_tokens, duration, usage.estimated_cost_usd,
+            input_tokens,
+            output_tokens,
+            duration,
+            usage.estimated_cost_usd,
         )
         return text
     except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
@@ -324,6 +360,7 @@ def generate_with_image(
 # ---------------------------------------------------------------------------
 # Tool / function-calling generation
 # ---------------------------------------------------------------------------
+
 
 def generate_with_tools(
     prompt: str,
@@ -401,11 +438,13 @@ def generate_with_tools(
             else:
                 result = {"error": f"No executor for tool '{tool_name}'"}
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": json.dumps(result) if not isinstance(result, str) else result,
-            })
+            tool_results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(result) if not isinstance(result, str) else result,
+                }
+            )
 
         messages.append({"role": "user", "content": tool_results})
     else:
@@ -424,7 +463,11 @@ def generate_with_tools(
 
     logger.info(
         "LLM tool-calling: %d rounds, %d tool calls, %d+%d tokens (%.1fms)",
-        len(tool_calls_log), len(tool_calls_log), total_input, total_output, duration,
+        len(tool_calls_log),
+        len(tool_calls_log),
+        total_input,
+        total_output,
+        duration,
     )
 
     return {
@@ -437,6 +480,7 @@ def generate_with_tools(
 # ---------------------------------------------------------------------------
 # Async streaming generation
 # ---------------------------------------------------------------------------
+
 
 async def generate_stream(
     prompt: str,
@@ -484,7 +528,9 @@ async def generate_stream(
         _session_usage.append(usage)
         logger.info(
             "LLM stream: %d input + %d output tokens (%.1fms)",
-            inp, out, duration,
+            inp,
+            out,
+            duration,
         )
     except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:
         logger.error("LLM stream error: %s", exc)
@@ -519,13 +565,18 @@ async def generate_async(
 
         inp, out = _extract_usage(response)
         usage = LLMUsage(
-            input_tokens=inp, output_tokens=out,
-            cache_hit=False, duration_ms=duration,
+            input_tokens=inp,
+            output_tokens=out,
+            cache_hit=False,
+            duration_ms=duration,
         )
         _session_usage.append(usage)
         logger.info(
             "LLM async: %d input + %d output tokens (%.1fms, ~$%.6f)",
-            inp, out, duration, usage.estimated_cost_usd,
+            inp,
+            out,
+            duration,
+            usage.estimated_cost_usd,
         )
         return text
     except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.APIStatusError) as exc:

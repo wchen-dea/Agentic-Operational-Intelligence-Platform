@@ -1,0 +1,30 @@
+[
+  {
+    "PropertyGroupId": "logging",
+    "PropertyMap": {
+      "log.level": "DEBUG"
+    }
+  },
+  {
+    "PropertyGroupId": "vehicle.canonical",
+    "PropertyMap": {
+      "topic.name": "CanonicalTrendwellVehivleMaster",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "scan.startup.mode": "earliest-offset",
+      "group.id": "flink-vehicle-v1",
+      "table.name": "kafka_src_vehicle"
+    }
+  },
+  {
+    "PropertyGroupId": "vehicle",
+    "PropertyMap": {
+      "topic.name": "SinkVehicle",
+      "bootstrap.servers": "localhost:9092",
+      "security.protocol": "PLAINTEXT",
+      "sr.url": "http://localhost:8081",
+      "table.name": "kafka_sink_vehicle"
+    }
+  }
+]

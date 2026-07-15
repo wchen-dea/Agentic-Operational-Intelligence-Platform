@@ -1,4 +1,4 @@
-"""Agentic tool-calling loop — lets the LLM autonomously invoke skills.
+"""Agentic tool-calling loop - lets the LLM autonomously invoke skills.
 
 Wraps ``generate_with_tools`` with the skill registry so that Claude can
 select and invoke any registered skill during a conversation turn.
@@ -43,6 +43,7 @@ def agentic_query(
     if not tool_schemas:
         logger.warning("No tools available for agentic query; falling back to plain generation.")
         from ai_layer.llm import generate as llm_generate
+
         return {
             "answer": llm_generate(question, system=system, max_tokens=max_tokens),
             "tool_calls": [],

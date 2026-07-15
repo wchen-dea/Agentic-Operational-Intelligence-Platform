@@ -1,21 +1,1412 @@
+# ---------------------------------------------------------------------------
+# Top-level extension fields — YAML anchors for shared service config
+# ---------------------------------------------------------------------------
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: container/airflow/Dockerfile
+  restart: unless-stopped
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR:                   LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:       postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY:                 ""
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES:              "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG:         "true"
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
+    DBT_PROJECT_DIR:  /opt/airflow/dbt
+    DBT_PROFILES_DIR: /opt/airflow/dbt
+    DBT_TARGET:       dev
+  volumes:
+    - ../container/airflow/dags:/opt/airflow/dags:ro
+    - ../data_platform/dbt:/opt/airflow/dbt:ro
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    airflow-postgres:
+      condition: service_healthy
+    spark-thriftserver:
+      condition: service_healthy
+
 services:
+
+  # ---------------------------------------------------------------------------
+  # Platform API
+  # ---------------------------------------------------------------------------
   app:
     build:
       context: ..
       dockerfile: container/Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ..:/app
-      - /app/.venv
+    restart: unless-stopped
     env_file:
       - ../.env
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - AOIP_REDIS__URL=redis://redis:6379/0
+      # Kafka / Schema Registry
+      - KAFKA_BROKERS=broker1:29092,broker2:29092,broker3:29092
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      # KPI source — read from the retail_ops MySQL populated by Kafka Connect JDBC Sink
+      - AOIP_KPI_SOURCE=aurora_mysql
+      - AOIP_AURORA_MYSQL__HOST=mysql
+      - AOIP_AURORA_MYSQL__PORT=3306
+      - AOIP_AURORA_MYSQL__DATABASE=retail_ops
+      - AOIP_AURORA_MYSQL__USERNAME=connect_user
+      - AURORA_PASSWORD=connect_pass
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health',timeout=4); sys.exit(0 if r.status==200 else 1)"
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Redis — session memory + streaming state cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >-
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Confluent Kafka — 3-broker KRaft cluster (no ZooKeeper)
+  #
+  # Internal listeners  : broker1:29092, broker2:29092, broker3:29092
+  # Host listeners      : localhost:9092, localhost:9093, localhost:9094
+  # Controller quorum   : broker1:29093, broker2:29093, broker3:29093
+  # Replication factor  : 3  (min ISR = 2)
+  # ---------------------------------------------------------------------------
+  broker1:
+    image: confluentinc/cp-kafka:7.7.0
+    hostname: broker1
+    restart: unless-stopped
+    ports:
+      - "9092:9092"   # host access
+      - "9101:9101"   # JMX
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker1:29093,2@broker2:29093,3@broker3:29093
+      KAFKA_LISTENERS: PLAINTEXT://broker1:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://broker1:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_IN_SYNC_REPLICAS: 2
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - broker1_data:/var/lib/kafka/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "broker1:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
+
+  broker2:
+    image: confluentinc/cp-kafka:7.7.0
+    hostname: broker2
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+      - "9102:9102"   # JMX
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker1:29093,2@broker2:29093,3@broker3:29093
+      KAFKA_LISTENERS: PLAINTEXT://broker2:29092,PLAINTEXT_HOST://0.0.0.0:9093,CONTROLLER://broker2:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker2:29092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_IN_SYNC_REPLICAS: 2
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_JMX_PORT: 9102
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - broker2_data:/var/lib/kafka/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "broker2:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
+
+  broker3:
+    image: confluentinc/cp-kafka:7.7.0
+    hostname: broker3
+    restart: unless-stopped
+    ports:
+      - "9094:9094"
+      - "9103:9103"   # JMX
+    environment:
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker1:29093,2@broker2:29093,3@broker3:29093
+      KAFKA_LISTENERS: PLAINTEXT://broker3:29092,PLAINTEXT_HOST://0.0.0.0:9094,CONTROLLER://broker3:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker3:29092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_IN_SYNC_REPLICAS: 2
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_JMX_PORT: 9103
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - broker3_data:/var/lib/kafka/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "broker3:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
+
+  # ---------------------------------------------------------------------------
+  # Confluent Schema Registry
+  #
+  # REST endpoint: http://localhost:8081
+  #   GET  /subjects                      list all subjects
+  #   GET  /subjects/{subject}/versions   list versions
+  #   GET  /schemas/ids/{id}              fetch schema by ID
+  # ---------------------------------------------------------------------------
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.7.0
+    hostname: schema-registry
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker1:29092,broker2:29092,broker3:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+      SCHEMA_REGISTRY_DEBUG: "false"
+    depends_on:
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/subjects"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # kafka-init — creates CDC and canonical topics (one-shot, exits 0)
+  #
+  # CDC topics   : retail_ops.aurora.retail_ops.<table>   (Aurora DMS/Debezium)
+  # Canonical topics: one per processed canonical schema
+  # ---------------------------------------------------------------------------
+  kafka-init:
+    image: confluentinc/cp-kafka:7.7.0
+    restart: "no"
+    depends_on:
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        BROKER=broker1:29092
+        echo '=== Creating CDC source topics (raw ingestion layer) ==='
+        for TOPIC in \
+          retail_ops.aurora.retail_ops.sales_orders \
+          retail_ops.aurora.retail_ops.appointments \
+          retail_ops.aurora.retail_ops.pos_invoices \
+          retail_ops.aurora.retail_ops.work_orders \
+          retail_ops.aurora.retail_ops.inventory_snapshots; do
+          kafka-topics --bootstrap-server $$BROKER \
+            --create --if-not-exists \
+            --topic $$TOPIC \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=604800000 \
+            --config cleanup.policy=delete
+          echo "  OK  $$TOPIC"
+        done
+
+        echo '=== Creating canonical processed topics ==='
+        for TOPIC in \
+          CanonicalKronosCrewtime CanonicalKronosEmployee CanonicalKronosHours CanonicalKronosSite \
+          CanonicalSalesforceCrmAppointment CanonicalSalesforceCrmCustomer \
+          CanonicalSapSalesorderDetail CanonicalSapSalesorderHybris CanonicalSapSalesorderInvoice CanonicalSapSalesorderVouche \
+          CanonicalTrendwellVehivleInspection CanonicalTrendwellVehivleMaster CanonicalTrendwellVehivleWorkorder \
+          CanonicalWarehouseInventoryProduct CanonicalWarehouseInventorySnapshot; do
+          kafka-topics --bootstrap-server $$BROKER \
+            --create --if-not-exists \
+            --topic $$TOPIC \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=604800000 \
+            --config cleanup.policy=delete
+          echo "  OK  $$TOPIC"
+        done
+
+        echo '=== Creating PDM sink topics ==='
+        for TOPIC in \
+          SinkYear SinkQuarter SinkMonthOfYear SinkMonth SinkWeek SinkDayOfTheWeek SinkDate SinkHour SinkMtd SinkYtd \
+          SinkRegion SinkSiteBlockingReason SinkSiteBusinessUnit SinkSite SinkAggSiteCutoverDate \
+          SinkEmployee SinkArticle SinkArticleInventory SinkVehicle \
+          SinkCustomer SinkCustomerAlternateIdentifier SinkCustomerContact SinkCustomerVehicle \
+          SinkSalesOrder SinkSalesOrderLineItem SinkSalesOrderLineItemFee \
+          SinkSalesOrderLineItemPromotion SinkSalesOrderLineItemTax \
+          SinkSalesOrderPromotion SinkSalesOrderTreadwellSession \
+          SinkSalesOrderReceipt SinkSalesOrderReceiptLineItem SinkSalesOrderReceiptLineItemAllocation \
+          SinkSalesOrderReceiptLineItemFee SinkSalesOrderReceiptLineItemPromotion \
+          SinkSalesOrderReceiptLineItemTax SinkSalesOrderReceiptPayment SinkSalesOrderReceiptPromotion \
+          SinkVoucher SinkAppointment SinkAppointmentSlotReservation \
+          SinkWorkOrder SinkWorkOrderBayAssignment SinkWorkOrderEmployee SinkWorkOrderLineItem \
+          SinkVehicleInspection SinkVehicleTireInspectionDetail SinkVehicleTireInspectionMeasurement \
+          SinkKronosHours SinkReflexisWeeklyStaffMetrics SinkAggStoreSecurity SinkStoreSecurity; do
+          kafka-topics --bootstrap-server $$BROKER \
+            --create --if-not-exists \
+            --topic $$TOPIC \
+            --partitions 3 \
+            --replication-factor 1 \
+            --config retention.ms=604800000 \
+            --config cleanup.policy=delete
+          echo "  OK  $$TOPIC"
+        done
+
+        echo '=== All topics ready ==='
+        kafka-topics --bootstrap-server $$BROKER --list
+
+  # ---------------------------------------------------------------------------
+  # schema-registry-init — registers all canonical Avro schemas (one-shot)
+  #
+  # Subjects follow the convention: <filename_stem>-value
+  #   e.g.  kronos.hours.avsc  →  subject: CanonicalKronosHours-value
+  #
+  # Idempotent: already-registered schemas are skipped gracefully.
+  # ---------------------------------------------------------------------------
+  schema-registry-init:
+    image: python:3.12-alpine
+    restart: "no"
+    volumes:
+      - ../data_platform/schema:/schemas:ro
+      - ./scripts/register_schemas.py:/register_schemas.py:ro
+    environment:
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - SCHEMAS_DIR=/schemas
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+    command: python3 /register_schemas.py
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — backing store for Conduktor Console
+  # ---------------------------------------------------------------------------
+  postgresql:
+    image: postgres:16-alpine
+    hostname: postgresql
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: conduktor_platform
+      POSTGRES_USER: conduktor
+      POSTGRES_PASSWORD: conduktor_pass
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conduktor -d conduktor_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Conduktor Console — Kafka monitoring and management UI
+  #
+  # Web UI   : http://localhost:8080
+  # Login    : admin@conduktor.io / admin  (change via CDK_ADMIN_* vars)
+  #
+  # Features available in the UI:
+  #   - Browse topics, consumer groups, and offsets
+  #   - Produce / consume messages with Avro / Schema Registry support
+  #   - View registered schemas (linked to Schema Registry on port 8081)
+  #   - Monitor broker / partition health and lag
+  # ---------------------------------------------------------------------------
+  conduktor-console:
+    image: conduktor/conduktor-console:1.25.0
+    hostname: conduktor-console
+    restart: unless-stopped
+    labels:
+      autoheal: conduktor-autoheal
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      CDK_DATABASE_URL: "postgresql://conduktor:conduktor_pass@postgresql:5432/conduktor_platform"
+      # Kafka cluster
+      CDK_CLUSTERS_0_ID: local
+      CDK_CLUSTERS_0_NAME: "Local Dev Kafka"
+      CDK_CLUSTERS_0_BOOTSTRAPSERVERS: broker1:29092,broker2:29092,broker3:29092
+      CDK_CLUSTERS_0_COLOR: "#2196f3"
+      CDK_CLUSTERS_0_ICON: kafka
+      # Schema Registry
+      CDK_CLUSTERS_0_SCHEMAREGISTRY_ID: local-sr
+      CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: http://schema-registry:8081
+      # Kafka Connect worker
+      CDK_CLUSTERS_0_KAFKACONNECTS_0_ID: local-connect
+      CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: local-connect
+      CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: http://kafka-connect:8083
+      # Admin credentials — override in production via .env
+      CDK_ADMIN_EMAIL: admin@conduktor.io
+      CDK_ADMIN_PASSWORD: admin
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      kafka-connect:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2500M
+        reservations:
+          cpus: "0.25"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 5 --noproxy '*' http://localhost:8080/api/health"]
+      interval: 20s
+      timeout: 8s
+      retries: 3
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # Flink cluster — JobManager + TaskManager
+  #
+  # Web Dashboard : http://localhost:8082
+  #   - Browse running/completed jobs, task graphs, checkpoints, logs
+  #
+  # The custom Flink image (container/flink/Dockerfile) is shared by all three
+  # roles (jobmanager, taskmanager, job-submit) so Python files, JARs, and the
+  # PYTHONPATH are identical on every node.
+  # ---------------------------------------------------------------------------
+  flink-jobmanager:
+    build:
+      context: ..
+      dockerfile: container/flink/Dockerfile
+      args:
+        PYTHON_VERSION: "3.11.10"
+        FLINK_VERSION: "1.20.0"
+        KAFKA_CONNECTOR_VERSION: "3.3.0-1.20"
+    command: jobmanager
+    hostname: flink-jobmanager
+    restart: unless-stopped
+    ports:
+      - "8082:8081"   # Flink Web Dashboard
+    environment:
+      RUNTIME_ENV: docker
+      PYTHONPATH: /opt/flink/usrlib
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
+        jobmanager.memory.process.size: 1600m
+        web.submit.enable: true
+        web.cancel.enable: true
+        state.backend: filesystem
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 60000
+        restart-strategy: fixed-delay
+        restart-strategy.fixed-delay.attempts: 5
+        restart-strategy.fixed-delay.delay: 10s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      broker1:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    volumes:
+      - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
+      - ../config:/opt/flink/usrlib/config:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 1600M
+
+  flink-taskmanager:
+    build:
+      context: ..
+      dockerfile: container/flink/Dockerfile
+      args:
+        PYTHON_VERSION: "3.11.10"
+        FLINK_VERSION: "1.20.0"
+        KAFKA_CONNECTOR_VERSION: "3.3.0-1.20"
+    command: taskmanager
+    hostname: flink-taskmanager
+    restart: unless-stopped
+    environment:
+      RUNTIME_ENV: docker
+      PYTHONPATH: /opt/flink/usrlib
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
+        taskmanager.memory.process.size: 3g
+        taskmanager.numberOfTaskSlots: 14
+        python.executable: python3
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    volumes:
+      - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
+      - ../config:/opt/flink/usrlib/config:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # flink-runner — generic one-shot job submitter
+  #
+  # Submits a single PyFlink job to the Flink cluster and exits.
+  # The job is selected by the JOB_NAME environment variable.
+  #
+  # Usage (via Makefile):
+  #   make flink-run JOB=appointment        # submit one pipeline
+  #   make flink-submit                     # submit all 14 pipelines
+  #
+  # Available pipelines:
+  #   appointment  article       crewtime    customer   employee
+  #   inventory    kronos_hours  sales_order sales_order_receipt
+  #   site         vehicle       vehicle_inspection
+  #   voucher      work_order
+  # ---------------------------------------------------------------------------
+  flink-runner:
+    build:
+      context: ..
+      dockerfile: container/flink/Dockerfile
+      args:
+        PYTHON_VERSION: "3.11.10"
+        FLINK_VERSION: "1.20.0"
+    restart: "no"
+    working_dir: /opt/flink/usrlib
+    environment:
+      RUNTIME_ENV: docker
+      PYTHONPATH: /opt/flink/usrlib
+      JOB_NAME: ""
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        if [ -z "$$JOB_NAME" ]; then
+          echo "ERROR: JOB_NAME is not set. Pass -e JOB_NAME=<pipeline> to docker compose run."
+          echo "Available pipelines: appointment article crewtime customer employee"
+          echo "                     inventory kronos_hours sales_order sales_order_receipt"
+          echo "                     site vehicle vehicle_inspection voucher work_order"
+          exit 1
+        fi
+        JOB_SCRIPT="/opt/flink/usrlib/flink_job/$$JOB_NAME/main.py"
+        if [ ! -f "$$JOB_SCRIPT" ]; then
+          echo "ERROR: Pipeline script not found: $$JOB_SCRIPT"
+          exit 1
+        fi
+        echo "==> Submitting pipeline: $$JOB_NAME"
+        flink run \
+          -py "$$JOB_SCRIPT" \
+          -pyfs /opt/flink/usrlib \
+          -pyexec python3
+    volumes:
+      - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
+      - ../config:/opt/flink/usrlib/config:ro
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+      flink-taskmanager:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  #
+  # All Kafka Connect JDBC Sink connectors write into this database.
+  # Database : retail_ops_sink
+  # User     : connect_user / connect_pass  (Kafka Connect)
+  # Root     : root / root_pass             (admin / migrations)
+  # Port     : 3306 (also exposed on host for SQL clients / DBeaver)
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    hostname: mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: retail_ops_sink
+      MYSQL_USER: connect_user
+      MYSQL_PASSWORD: connect_pass
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+00:00
+      --max-allowed-packet=128M
+      --innodb-buffer-pool-size=256M
+      --server-id=1
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --binlog-row-image=FULL
+      --binlog-expire-logs-seconds=604800
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --sql-mode=
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # PDM init scripts — executed once in alphabetical order on first start.
+      # Scripts are mounted read-only; MySQL runs them as root on database creation.
+      - ../data_platform/ddl:/docker-entrypoint-initdb.d:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "connect_user", "-pconnect_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Kafka Connect — distributed worker with JDBC Sink + MySQL driver
+  #
+  # Custom image  : container/kafka-connect/Dockerfile
+  #   base        : confluentinc/cp-kafka-connect:7.7.0
+  #   + plugin    : confluentinc/kafka-connect-jdbc:10.7.6  (confluent-hub)
+  #   + driver    : mysql-connector-j-8.3.0.jar             (Maven Central)
+  #
+  # REST API      : http://localhost:8083
+  #   GET  /connectors               list all connectors
+  #   GET  /connectors/{name}/status connector health + task state
+  #   GET  /connector-plugins         list available plugins
+  # ---------------------------------------------------------------------------
+  kafka-connect:
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
+    hostname: kafka-connect
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: broker1:29092,broker2:29092,broker3:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: retail-ops-connect-cluster
+      # Internal Kafka topics for Connect offset / config / status state
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      # Default converters (individual connectors can override per-topic)
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      # Plugin path — includes confluent-hub-installed connectors
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      # Schema Registry for Avro converters used in canonical connectors
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+    depends_on:
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 768M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8083/connectors"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # connect-init — registers all JDBC Sink connectors (one-shot, exits 0)
+  #
+  # CDC connectors (5):
+  #   retail_ops.aurora.retail_ops.*  →  MySQL tables in retail_ops_sink
+  #   insert.mode=upsert, pk=event_id, converter=JSON
+  #
+  # Canonical connectors (15):
+  #   kronos.*, salesforce.*, sap.*, trendwell.*, w*house.*
+  #   insert.mode=upsert, pk=kafka coords, converter=Avro+SchemaRegistry
+  #
+  # Idempotent: connectors that already exist (HTTP 409) are skipped.
+  # ---------------------------------------------------------------------------
+  connect-init:
+    image: python:3.12-alpine
+    restart: "no"
+    volumes:
+      - ./scripts/register_connectors.py:/register_connectors.py:ro
+    environment:
+      - CONNECT_URL=http://kafka-connect:8083
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - MYSQL_USER=connect_user
+      - MYSQL_PASSWORD=connect_pass
+      # Target the PDM database — topic name == table name in retail_ops
+      - MYSQL_URL=jdbc:mysql://mysql:3306/retail_ops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&jdbcCompliantTruncation=false
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    command: python3 /register_connectors.py
+
+  # ---------------------------------------------------------------------------
+  # cdc-init -- registers the Debezium MySQL source connector (one-shot)
+  #
+  # Captures row-level changes from all retail_ops tables via MySQL binlog
+  # and publishes them to cdc_{table_name} topics in Kafka.
+  #
+  # Topic naming: dbz.retail_ops.<table>  --(RegexRouter)--> cdc_<table>
+  #   e.g.  retail_ops.sales_order  ->  cdc_sales_order
+  #
+  # Idempotent: connector already existing (HTTP 409) is skipped.
+  # ---------------------------------------------------------------------------
+  cdc-init:
+    image: python:3.12-alpine
+    restart: "no"
+    volumes:
+      - ./scripts/register_cdc_connector.py:/register_cdc_connector.py:ro
+    environment:
+      - CONNECT_URL=http://kafka-connect:8083
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=debezium
+      - MYSQL_PASSWORD=debezium_pass
+      - MYSQL_DATABASE=retail_ops
+      - KAFKA_BOOTSTRAP_SERVERS=broker1:29092,broker2:29092,broker3:29092
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    command: python3 /register_cdc_connector.py
+
+  # ---------------------------------------------------------------------------
+  # producer — synthetic Avro message generator for all 15 canonical topics
+  #
+  # Produces realistic fake records to Kafka at the rate set by PRODUCE_INTERVAL
+  # (seconds between bursts).  Runs until stopped; restart: unless-stopped keeps
+  # it alive if the brokers briefly disconnect.
+  # ---------------------------------------------------------------------------
+  producer:
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    restart: unless-stopped
+    command: ["/app/.venv/bin/python", "-m", "data_platform.producer.main",
+              "--all", "--interval", "${PRODUCE_INTERVAL:-0.5}"]
+    environment:
+      - KAFKA_BROKERS=broker1:29092,broker2:29092,broker3:29092
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    profiles:
+      - producer
+
+  # ---------------------------------------------------------------------------
+  # autoheal — restarts containers that become unhealthy
+  #
+  # Docker Compose restart policies only trigger on process exit, not on
+  # health status changes.  autoheal watches the Docker socket and calls
+  # `docker restart` whenever a container transitions to "unhealthy".
+  #
+  # AUTOHEAL_CONTAINER_LABEL=conduktor-autoheal limits restarts to containers
+  # that carry the label "autoheal=conduktor-autoheal" (i.e. conduktor-console).
+  # ---------------------------------------------------------------------------
+  autoheal:
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: conduktor-autoheal
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 120
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ---------------------------------------------------------------------------
+  # Airflow — dbt pipeline orchestrator
+  #
+  # Web UI    : http://localhost:8085  (admin / admin)
+  # Executor  : LocalExecutor (single-node; no Celery / Redis needed)
+  # Metadata  : airflow-postgres (dedicated PG instance)
+  # DAGs      : container/airflow/dags/ (bind-mounted)
+  # dbt project: data_platform/dbt/     (bind-mounted at /opt/airflow/dbt)
+  #
+  # Schedule: every 30 min  bronze → silver → gold
+  # ---------------------------------------------------------------------------
+  airflow-postgres:
+    image: postgres:16-alpine
+    hostname: airflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       airflow
+      POSTGRES_USER:     airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  airflow-init:
+    <<: *airflow-common
+    restart: "no"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@aoip.local \
+          --password admin
+        echo "Airflow initialised"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8085:8080"   # Airflow Web UI
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+      spark-thriftserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+      spark-thriftserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # ---------------------------------------------------------------------------
+  # Analytics layer — downstream of gold Iceberg tables
+  #
+  # Components:
+  #   qdrant        : vector database for AI semantic search
+  #   feast-server  : online feature store server (serves features from Redis)
+  #   vector-indexer: one-shot job that builds Qdrant indexes from gold layer
+  # ---------------------------------------------------------------------------
+
+  # ── Qdrant vector database ──────────────────────────────────────────────
+  # REST API  : http://localhost:6333
+  # gRPC      : localhost:6334
+  # Dashboard : http://localhost:6333/dashboard
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    hostname: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST + Dashboard
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: "6333"
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ── Feast online feature server ─────────────────────────────────────────
+  # REST endpoint: http://localhost:6566/get-online-features
+  feast-server:
+    image: python:3.12-slim
+    hostname: feast-server
+    restart: unless-stopped
+    working_dir: /feature_store
+    command:
+      - bash
+      - -c
+      - |
+        pip install --quiet feast[redis]==0.40.0 && \
+        feast -c /feature_store serve --host 0.0.0.0 --port 6566
+    ports:
+      - "6566:6566"   # Feast online feature server
+    volumes:
+      - ../data_platform/feature_store:/feature_store:ro
+    environment:
+      FEAST_USAGE: "False"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6566/get-online-features || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ── Vector indexer (one-shot) ────────────────────────────────────────────
+  # Reads gold Iceberg tables, generates embeddings, upserts into Qdrant.
+  # restart: on-failure retries if Qdrant or Spark Thrift isn't ready yet.
+  vector-indexer:
+    image: python:3.12-slim
+    hostname: vector-indexer
+    restart: "no"
+    working_dir: /app
+    command:
+      - bash
+      - -c
+      - |
+        pip install --quiet \
+            qdrant-client==1.9.0 \
+            sentence-transformers==2.7.0 \
+            pyhive[hive]==0.7.0 \
+            thrift==0.20.0 && \
+        python /app/indexer.py
+    volumes:
+      - ../data_platform/vector_index/indexer.py:/app/indexer.py:ro
+    environment:
+      QDRANT_HOST:       qdrant
+      QDRANT_PORT:       "6333"
+      SPARK_THRIFT_HOST: spark-thriftserver
+      SPARK_THRIFT_PORT: "10000"
+      EMBEDDING_MODEL:   sentence-transformers/all-MiniLM-L6-v2
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      spark-thriftserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible object storage
+  #
+  # Buckets (created by minio-init):
+  #   landing    Raw CDC events from Spark Structured Streaming (Iceberg append)
+  #   warehouse  Iceberg table data (bronze / silver / gold)
+  #   checkpoints Spark Streaming checkpoint state
+  #
+  # S3 API   : http://localhost:9000  (internal: http://minio:9000)
+  # Console  : http://localhost:9001  (user: minioadmin / minioadmin)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    hostname: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    environment:
+      MINIO_ROOT_USER:     minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-01-16T16-07-38Z
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/landing &&
+        mc mb --ignore-existing local/warehouse &&
+        mc mb --ignore-existing local/checkpoints &&
+        echo 'MinIO buckets ready: landing, warehouse, checkpoints'
+      "
+
+  # ---------------------------------------------------------------------------
+  # Iceberg REST Catalog
+  #
+  # REST endpoint : http://localhost:8181  (internal: http://iceberg-rest:8181)
+  # Warehouse     : s3a://warehouse/  (backed by MinIO)
+  # ---------------------------------------------------------------------------
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.1
+    hostname: iceberg-rest
+    restart: unless-stopped
+    ports:
+      - "8181:8181"
+    environment:
+      CATALOG_WAREHOUSE:                 s3a://warehouse/
+      CATALOG_IO__IMPL:                  org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT:               http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS:    "true"
+      CATALOG_S3_ACCESS__KEY__ID:        minioadmin
+      CATALOG_S3_SECRET__ACCESS__KEY:    minioadmin
+      CATALOG_S3_REGION:                 us-east-1
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8181/v1/config || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Spark standalone cluster (master + worker) with Iceberg extensions
+  #
+  # Spark Master Web UI : http://localhost:4040
+  # Spark Thrift Server : jdbc:hive2://localhost:10000  (for dbt-spark)
+  # ---------------------------------------------------------------------------
+  spark-master:
+    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    hostname: spark-master
+    restart: unless-stopped
+    command: ["spark-master"]
+    ports:
+      - "4040:8080"    # Spark Master Web UI
+      - "7077:7077"    # Spark master RPC
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      iceberg-rest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  spark-worker:
+    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    hostname: spark-worker
+    restart: unless-stopped
+    command: ["spark-worker"]
+    environment:
+      SPARK_MASTER:          spark://spark-master:7077
+      SPARK_WORKER_CORES:    "2"
+      SPARK_WORKER_MEMORY:   2g
+      SPARK_NO_DAEMONIZE:    "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+
+  # ---------------------------------------------------------------------------
+  # Spark Thrift Server — HiveServer2-compatible JDBC endpoint for dbt-spark
+  #
+  # JDBC : jdbc:hive2://localhost:10000
+  # ---------------------------------------------------------------------------
+  spark-thriftserver:
+    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    hostname: spark-thriftserver
+    restart: unless-stopped
+    command:
+      - bash
+      - -c
+      - |
+        /opt/spark/sbin/start-thriftserver.sh \
+          --master spark://spark-master:7077 \
+          --hiveconf hive.server2.thrift.port=10000 \
+          --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+          --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+          --conf spark.sql.catalog.iceberg.type=rest \
+          --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181 \
+          --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
+          --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000 \
+          --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
+          --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin \
+          --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin \
+          --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
+          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.path.style.access=true \
+          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+        tail -f /opt/spark/logs/spark-*.out
+    ports:
+      - "10000:10000"   # Thrift JDBC
+    environment:
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -ln | grep 10000 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # Spark CDC Streaming — reads CDC Kafka topics, sinks to MinIO landing (Iceberg)
+  #
+  # Submits cdc_to_landing.py to the Spark cluster and blocks until terminated.
+  # restart: unless-stopped keeps the streaming job alive after broker restarts.
+  # ---------------------------------------------------------------------------
+  spark-cdc-streaming:
+    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    hostname: spark-cdc-streaming
+    restart: unless-stopped
+    command:
+      - bash
+      - -c
+      - |
+        spark-submit \
+          --master spark://spark-master:7077 \
+          --deploy-mode client \
+          --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
+          --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+          --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+          --conf spark.sql.catalog.iceberg.type=rest \
+          --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181 \
+          --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
+          --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000 \
+          --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
+          --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin \
+          --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin \
+          --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
+          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+          --conf spark.hadoop.fs.s3a.path.style.access=true \
+          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
+          /opt/spark/work-dir/cdc_to_landing.py --all
+    volumes:
+      - ../data_platform/batch/spark/cdc_to_landing.py:/opt/spark/work-dir/cdc_to_landing.py:ro
+    environment:
+      KAFKA_BROKERS:      broker1:29092,broker2:29092,broker3:29092
+      MINIO_ENDPOINT:     http://minio:9000
+      MINIO_ACCESS_KEY:   minioadmin
+      MINIO_SECRET_KEY:   minioadmin
+      ICEBERG_REST_URL:   http://iceberg-rest:8181
+      CHECKPOINT_BASE:    s3a://checkpoints/cdc
+      SPARK_MASTER:       spark://spark-master:7077
+      AWS_ACCESS_KEY_ID:  minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:         us-east-1
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_healthy
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # dbt-spark — runs dbt transformations (bronze / silver / gold) against the
+  # Spark Thrift Server.
+  #
+  # Default command: `dbt run` (all layers)
+  # Override via: make dbt-run LAYER=silver
+  # ---------------------------------------------------------------------------
+  dbt-runner:
+    image: ghcr.io/dbt-labs/dbt-spark:1.8.latest
+    hostname: dbt-runner
+    restart: "no"
+    working_dir: /usr/app/dbt
+    command: ["dbt", "run", "--profiles-dir", "/usr/app/dbt", "--project-dir", "/usr/app/dbt"]
+    volumes:
+      - ../data_platform/dbt:/usr/app/dbt:ro
+    environment:
+      DBT_PROFILES_DIR: /usr/app/dbt
+    depends_on:
+      spark-thriftserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  redis_data:
+  broker1_data:
+  broker2_data:
+  broker3_data:
+  postgresql_data:
+  mysql_data:
+  minio_data:
+  airflow_postgres_data:
+  airflow_logs:
+  qdrant_data:
+
+

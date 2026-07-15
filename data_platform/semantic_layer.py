@@ -1,4 +1,4 @@
-"""Typed semantic KPI layer — wraps raw metric values with context for AI-ready consumption.
+"""Typed semantic KPI layer - wraps raw metric values with context for AI-ready consumption.
 
 Every KPIRecord carries its own description, unit, direction, and threshold so that
 agents and LLMs can reason about the value without needing external lookups.
@@ -24,6 +24,7 @@ _CATALOG_PATH = Path(__file__).resolve().parent.parent / "data_platform" / "kpi_
 # KPI catalog loader
 # ---------------------------------------------------------------------------
 
+
 @lru_cache(maxsize=1)
 def _load_kpi_catalog(path: str | None = None) -> dict[str, dict[str, Any]]:
     """Load the KPI catalog YAML and index by metric name."""
@@ -45,6 +46,7 @@ def get_kpi_metadata(metric_name: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Data provenance
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class DataProvenance:
@@ -69,8 +71,9 @@ class DataProvenance:
 
 
 # ---------------------------------------------------------------------------
-# KPIRecord — semantic wrapper around a single metric value
+# KPIRecord - semantic wrapper around a single metric value
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class KPIRecord:
@@ -85,6 +88,8 @@ class KPIRecord:
     description: str = ""
     domain: str = ""
     provenance: DataProvenance = field(default_factory=DataProvenance)
+    # Trend relative to recent history: improving | declining | stable | insufficient_data
+    trend_label: str = "insufficient_data"
 
     @property
     def is_anomalous(self) -> bool:
@@ -95,11 +100,6 @@ class KPIRecord:
             return True
         return False
 
-    @property
-    def trend_label(self) -> str:
-        """Placeholder — requires historical data; returns 'unknown' for now."""
-        return "unknown"
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
@@ -109,6 +109,7 @@ class KPIRecord:
             "threshold_min": self.threshold_min,
             "threshold_max": self.threshold_max,
             "is_anomalous": self.is_anomalous,
+            "trend_label": self.trend_label,
             "description": self.description,
             "domain": self.domain,
             "provenance": self.provenance.to_dict(),
@@ -117,12 +118,13 @@ class KPIRecord:
     def to_llm_summary(self) -> str:
         """One-line summary optimized for LLM prompt injection."""
         status = "ANOMALOUS" if self.is_anomalous else "ok"
-        return f"{self.name}={self.value} {self.unit} [{status}] — {self.description}"
+        return f"{self.name}={self.value} {self.unit} [{status}] - {self.description}"
 
 
 # ---------------------------------------------------------------------------
-# StoreKPISnapshot — a full store's worth of semantic KPI records
+# StoreKPISnapshot - a full store's worth of semantic KPI records
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class StoreKPISnapshot:
@@ -161,21 +163,64 @@ class StoreKPISnapshot:
 
 
 # ---------------------------------------------------------------------------
-# Factory: raw dict → StoreKPISnapshot
+# Factory: raw dict -> StoreKPISnapshot
 # ---------------------------------------------------------------------------
 
 # Metrics that are identifiers, not KPI values
 _NON_METRIC_KEYS = {"store_id", "region", "store_count", "stores"}
 
 
+def compute_trend(
+    current: float,
+    history: list[float],
+    direction: str = "higher_is_better",
+    stable_band_pct: float = 0.05,
+) -> str:
+    """Compute a trend label by comparing the current value against recent history.
+
+    Args:
+        current:        The latest observed value.
+        history:        Ordered list of historical values (oldest first).
+                        At least 2 values are required to compute a trend.
+        direction:      "higher_is_better" or "lower_is_better".
+        stable_band_pct: Relative change below this threshold is labelled "stable".
+
+    Returns:
+        One of: ``"improving"``, ``"declining"``, ``"stable"``,
+        ``"insufficient_data"``.
+    """
+    if len(history) < 2:
+        return "insufficient_data"
+
+    baseline = sum(history) / len(history)
+    if baseline == 0:
+        return "stable" if current == 0 else "improving" if current > 0 else "declining"
+
+    change = (current - baseline) / abs(baseline)
+
+    if abs(change) < stable_band_pct:
+        return "stable"
+
+    improving = change > 0 if direction == "higher_is_better" else change < 0
+    return "improving" if improving else "declining"
+
+
 def enrich_kpis(
     raw: dict[str, Any],
     provenance: DataProvenance | None = None,
+    history: dict[str, list[float]] | None = None,
 ) -> StoreKPISnapshot:
     """Convert a flat KPI dict into a fully enriched StoreKPISnapshot.
 
     Looks up each metric name in the KPI catalog to attach unit, direction,
-    description, and thresholds automatically.
+    description, and thresholds automatically.  When ``history`` is provided
+    the trend label is computed for each metric.
+
+    Args:
+        raw:        Flat dict of metric_name -> value (as returned by a KPIDataSource).
+        provenance: Optional data provenance metadata.
+        history:    Optional mapping of metric_name -> ordered list of historical values.
+                    When present, ``KPIRecord.trend_label`` is populated.
     """
     prov = provenance or DataProvenance()
     records: list[KPIRecord] = []
@@ -187,17 +232,26 @@ def enrich_kpis(
         if not isinstance(value, (int, float)):
             continue
         meta = catalog.get(key, {})
-        records.append(KPIRecord(
-            name=key,
-            value=float(value),
-            unit=meta.get("unit", "unknown"),
-            direction=meta.get("direction", "higher_is_better"),
-            threshold_min=meta.get("threshold_min"),
-            threshold_max=meta.get("threshold_max"),
-            description=meta.get("description", ""),
-            domain=meta.get("domain", ""),
-            provenance=prov,
-        ))
+        direction = meta.get("direction", "higher_is_better")
+
+        # Trend computation from history
+        hist_values = (history or {}).get(key, [])
+        trend = compute_trend(float(value), hist_values, direction=direction)
+
+        records.append(
+            KPIRecord(
+                name=key,
+                value=float(value),
+                unit=meta.get("unit", "unknown"),
+                direction=direction,
+                threshold_min=meta.get("threshold_min"),
+                threshold_max=meta.get("threshold_max"),
+                description=meta.get("description", ""),
+                domain=meta.get("domain", ""),
+                provenance=prov,
+                trend_label=trend,
+            )
+        )
 
     return StoreKPISnapshot(
         store_id=raw.get("store_id"),

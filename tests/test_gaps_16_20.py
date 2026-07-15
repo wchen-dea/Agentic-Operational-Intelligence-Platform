@@ -89,7 +89,7 @@ def test_persistent_memory_ttl_expiry(tmp_path):
     db = tmp_path / "test_mem.db"
     mem = PersistentSessionMemory(db_path=db, ttl_seconds=0.0)
     mem.add_turn("s1", "user", "ephemeral")
-    # TTL=0 → immediate expiry on next read
+    # TTL=0 -> immediate expiry on next read
     turns = mem.get_history("s1")
     assert turns == []
 
@@ -128,7 +128,7 @@ def test_experiment_assign_variant_deterministic():
     mgr.create_experiment("test", variants={"default": 50, "new": 50})
     v1 = mgr.assign_variant("test", session_id="session-abc")
     v2 = mgr.assign_variant("test", session_id="session-abc")
-    assert v1 == v2  # same session → same variant (sticky)
+    assert v1 == v2  # same session -> same variant (sticky)
 
 
 def test_experiment_assign_variant_distribution():
@@ -150,6 +150,7 @@ def test_experiment_assign_no_experiment():
 
 def test_experiment_record_and_results():
     import random
+
     random.seed(42)
     mgr = ExperimentManager()
     mgr.create_experiment("test", variants={"a": 50, "b": 50})
@@ -159,7 +160,7 @@ def test_experiment_record_and_results():
     results = mgr.get_results("test")
     assert results["variants"]["a"]["mean_score"] > 0.7
     assert results["variants"]["b"]["mean_score"] < 0.5
-    # Large effect size + many samples → should be significant
+    # Large effect size + many samples -> should be significant
     assert results["significance"]["significant"] is True
 
 
@@ -315,6 +316,7 @@ def test_get_prompt_convenience():
 def test_pyright_config_exists():
     """pyproject.toml should contain [tool.pyright] section."""
     from pathlib import Path
+
     toml_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
     content = toml_path.read_text()
     assert "[tool.pyright]" in content
@@ -324,6 +326,7 @@ def test_pyright_config_exists():
 def test_ruff_config_exists():
     """pyproject.toml should contain [tool.ruff] section."""
     from pathlib import Path
+
     toml_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
     content = toml_path.read_text()
     assert "[tool.ruff]" in content

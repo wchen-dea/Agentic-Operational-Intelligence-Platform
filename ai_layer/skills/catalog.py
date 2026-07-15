@@ -25,12 +25,14 @@ class FetchKPISkill(Skill):
             description="Retrieve current operational KPIs for a specific store or aggregated by region.",
             parameters=[
                 SkillParameter(name="store_id", type="string", description="Store identifier", required=False),
-                SkillParameter(name="region", type="string", description="Region name for aggregated KPIs", required=False),
+                SkillParameter(
+                    name="region", type="string", description="Region name for aggregated KPIs", required=False
+                ),
             ],
             tags=["kpi", "data", "read"],
         )
 
-    def execute(self, **kwargs: Any) -> dict[str, Any]:
+    def execute(self, **kwargs: Any) -> dict[str, Any] | "StoreKPISnapshot":
         return fetch_store_kpis(
             store_id=kwargs.get("store_id"),
             region=kwargs.get("region"),
@@ -72,7 +74,9 @@ class SemanticSearchSkill(Skill):
             description="Search the operational knowledge base for context relevant to a query.",
             parameters=[
                 SkillParameter(name="query", type="string", description="Natural language search query"),
-                SkillParameter(name="top_k", type="number", description="Number of results to return", required=False, default=3),
+                SkillParameter(
+                    name="top_k", type="number", description="Number of results to return", required=False, default=3
+                ),
             ],
             tags=["rag", "retrieval", "context"],
         )
@@ -116,7 +120,13 @@ class GenerateNarrativeSkill(Skill):
             description="Generate a natural-language operational brief using LLM from structured KPI/alert data.",
             parameters=[
                 SkillParameter(name="readout", type="string", description="Structured operational readout text"),
-                SkillParameter(name="persona", type="string", description="Target persona (store_manager or executive)", required=False, default="store_manager"),
+                SkillParameter(
+                    name="persona",
+                    type="string",
+                    description="Target persona (store_manager or executive)",
+                    required=False,
+                    default="store_manager",
+                ),
             ],
             tags=["llm", "generation", "narrative"],
         )

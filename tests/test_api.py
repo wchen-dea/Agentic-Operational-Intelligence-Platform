@@ -39,11 +39,14 @@ def test_alerts_store():
 
 
 def test_ask_endpoint():
-    response = client.post("/ask", json={
-        "question": "Why are sales low?",
-        "store_id": "245",
-        "persona": "store_manager",
-    })
+    response = client.post(
+        "/ask",
+        json={
+            "question": "Why are sales low?",
+            "store_id": "245",
+            "persona": "store_manager",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "answer" in data
@@ -52,10 +55,13 @@ def test_ask_endpoint():
 
 
 def test_operations_brief():
-    response = client.post("/operations/brief", json={
-        "store_id": "245",
-        "persona": "executive",
-    })
+    response = client.post(
+        "/operations/brief",
+        json={
+            "store_id": "245",
+            "persona": "executive",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "operational_brief" in data

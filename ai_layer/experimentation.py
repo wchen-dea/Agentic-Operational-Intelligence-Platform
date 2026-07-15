@@ -1,4 +1,4 @@
-"""A/B prompt experimentation — traffic splitting, metric collection, and significance testing.
+"""A/B prompt experimentation - traffic splitting, metric collection, and significance testing.
 
 Wires into the existing ``PromptRegistry`` variant support to route a
 percentage of traffic to experimental prompt variants, collect per-variant
@@ -57,7 +57,7 @@ class Experiment:
     """An active A/B experiment on a prompt template."""
 
     prompt_name: str
-    # variant_name → traffic weight (percentages, must sum to 100)
+    # variant_name -> traffic weight (percentages, must sum to 100)
     traffic_split: dict[str, int]
     metrics: dict[str, VariantMetrics] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
@@ -84,7 +84,7 @@ class ExperimentManager:
 
         Args:
             prompt_name: The prompt template name (must match PromptRegistry).
-            variants: Mapping of variant name → traffic percentage (must sum to 100).
+            variants: Mapping of variant name -> traffic percentage (must sum to 100).
         """
         total = sum(variants.values())
         if total != 100:
@@ -107,7 +107,7 @@ class ExperimentManager:
         if exp is None or not exp.active:
             return "default"
 
-        # Consistent hash → bucket (0-99)
+        # Consistent hash -> bucket (0-99)
         hash_input = f"{prompt_name}:{session_id}"
         bucket = int(hashlib.md5(hash_input.encode()).hexdigest(), 16) % 100
 
@@ -247,7 +247,21 @@ _manager: ExperimentManager | None = None
 
 
 def get_experiment_manager() -> ExperimentManager:
+    """Return the global ExperimentManager singleton.
+
+    Bootstraps a default A/B experiment for the 'operational_brief' prompt
+    (80 % 'default' / 20 % 'concise' traffic split) so that the experiment
+    infrastructure is active out of the box without any extra configuration.
+    """
     global _manager
     if _manager is None:
         _manager = ExperimentManager()
+        try:
+            _manager.create_experiment(
+                "operational_brief",
+                variants={"default": 80, "concise": 20},
+            )
+            logger.info("Default operational_brief A/B experiment initialized (80%% default / 20%% concise)")
+        except Exception as exc:
+            logger.warning("Could not initialize default experiment: %s", exc)
     return _manager

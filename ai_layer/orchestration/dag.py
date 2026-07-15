@@ -1,4 +1,4 @@
-"""Agent execution DAG — declarative graph of agent nodes and dependencies."""
+"""Agent execution DAG - declarative graph of agent nodes and dependencies."""
 
 from __future__ import annotations
 
@@ -72,16 +72,9 @@ class AgentDAG:
         tiers: list[list[str]] = []
 
         while remaining:
-            tier = [
-                name
-                for name in remaining
-                if all(dep in completed for dep in self._nodes[name].depends_on)
-            ]
+            tier = [name for name in remaining if all(dep in completed for dep in self._nodes[name].depends_on)]
             if not tier:
-                unresolved = {
-                    name: self._nodes[name].depends_on
-                    for name in remaining
-                }
+                unresolved = {name: self._nodes[name].depends_on for name in remaining}
                 raise ValueError(f"Cycle detected in DAG. Unresolved: {unresolved}")
             tiers.append(sorted(tier))
             completed.update(tier)

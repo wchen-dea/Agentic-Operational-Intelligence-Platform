@@ -1,0 +1,49 @@
+version: 2
+sources:
+- name: landing
+  description: >
+    Append-only Iceberg tables in MinIO written by Spark Structured Streaming. Each row is a raw Debezium CDC envelope from the Aurora MySQL CDC topics. Schema: iceberg.landing
+
+  database: iceberg
+  schema: landing
+  loader: spark-structured-streaming
+  tables:
+  - name: sales_orders
+    description: "CDC log for retail_ops.aurora.retail_ops.sales_orders"
+    columns: &cdc_envelope
+    - name: kafka_topic
+      description: Kafka topic the message was consumed from
+    - name: kafka_partition
+      description: Kafka partition number
+    - name: kafka_offset
+      description: Kafka offset (monotonically increasing per partition)
+    - name: kafka_timestamp
+      description: Kafka produce timestamp
+    - name: cdc_op
+      description: "Debezium op code: c=create, u=update, d=delete, r=snapshot-read"
+      tests:
+      - not_null
+      - accepted_values:
+          values: ['c', 'u', 'd', 'r']
+    - name: cdc_ts_ms
+      description: Source event timestamp (epoch ms) from Debezium
+    - name: before_json
+      description: "Row state before the event (JSON). Null for inserts."
+    - name: after_json
+      description: "Row state after the event (JSON). Null for deletes."
+    - name: source_json
+      description: Debezium source metadata (server, db, table, binlog pos)
+    - name: ingested_at
+      description: Timestamp when Spark wrote this row to MinIO
+  - name: appointments
+    description: "CDC log for retail_ops.aurora.retail_ops.appointments"
+    columns: *cdc_envelope
+  - name: pos_invoices
+    description: "CDC log for retail_ops.aurora.retail_ops.pos_invoices"
+    columns: *cdc_envelope
+  - name: work_orders
+    description: "CDC log for retail_ops.aurora.retail_ops.work_orders"
+    columns: *cdc_envelope
+  - name: inventory_snapshots
+    description: "CDC log for retail_ops.aurora.retail_ops.inventory_snapshots"
+    columns: *cdc_envelope

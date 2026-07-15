@@ -1,0 +1,33 @@
+version: 2
+models:
+- name: stg_sales_orders
+  description: >
+    Staged CDC events for sales orders. Filters tombstone messages and selects the raw Debezium envelope columns unchanged.
+
+  columns:
+  - name: cdc_op
+    tests: [not_null]
+  - name: cdc_ts_ms
+    tests: [not_null]
+  - name: ingested_at
+    tests: [not_null]
+- name: stg_appointments
+  description: Staged CDC events for appointments.
+  columns:
+  - name: cdc_op
+    tests: [not_null]
+- name: stg_pos_invoices
+  description: Staged CDC events for POS invoices.
+  columns:
+  - name: cdc_op
+    tests: [not_null]
+- name: stg_work_orders
+  description: Staged CDC events for work orders.
+  columns:
+  - name: cdc_op
+    tests: [not_null]
+- name: stg_inventory_snapshots
+  description: Staged CDC events for daily inventory snapshots.
+  columns:
+  - name: cdc_op
+    tests: [not_null]

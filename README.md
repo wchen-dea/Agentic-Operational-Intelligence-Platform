@@ -1,291 +1,255 @@
 # Agentic Operational Intelligence Platform
 
-Production-shaped AI operations platform for store managers and executives to monitor real-time KPI and alert signals, diagnose root causes, and adjust commercial and operational strategies.
+AI operations platform for store managers and executives — real-time KPI monitoring, root-cause diagnosis, and commercial strategy recommendations powered by an agentic AI layer over a streaming Iceberg lakehouse.
 
-## Project Target Status
+## Pipeline architecture
 
-Current target status: `agentic-operational-intelligence-platform`
+The platform is composed of eight sequential, independently deployable pipeline stages:
 
-This repository is currently aligned to this target with:
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 1 · Ingestion                                                         │
+│ Synthetic / real source-system events → 15 canonical Avro Kafka topics      │
+│ data_platform/producer/   data_platform/schema/                             │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ CanonicalSalesforceCrm*, CanonicalSap*
+                                    │ CanonicalTrendwell*, CanonicalKronos*
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 2 · Flink Stream Processing                                           │
+│ 14 PyFlink Table API jobs transform canonical topics → PDM Sink* topics     │
+│ data_platform/flink_job/   Flink cluster (jobmanager + taskmanager :8082)   │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ SinkSalesOrder*, SinkAppointment*
+                                    │ SinkWorkOrder*, SinkInventory*, …
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 3 · Kafka Connect JDBC Sink → MySQL ODS                               │
+│ JDBC Sink connectors write PDM Sink* topics → MySQL retail_ops_sink tables  │
+│ container/scripts/register_connectors.py   MySQL :3306                      │
+└──────────────┬────────────────────────────────────────────────────────────┬─┘
+               │ MySQL ODS                                                  │
+               ▼                                                            │
+┌──────────────────────────────────────────┐         Stage 5                │
+│ Stage 4 · AI Systems (real-time path)    │                                 │
+│ FastAPI + AI agents consume MySQL ODS    │                                 │
+│ KPI queries, anomaly detection, briefs   │                                 │
+│ services/api/   ai_layer/   :8000        │                                 │
+└──────────────────────────────────────────┘                                 │
+                                                                              │
+┌─────────────────────────────────────────────────────────────────────────────┤
+│ Stage 5 · Debezium CDC → Kafka                                             │
+│ Debezium connector captures MySQL ODS changes → CDC Kafka topics           │
+│ container/scripts/register_cdc_connector.py                                │
+│ Topics: retail_ops.aurora.retail_ops.<table>                               │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ CDC envelope: before/after/op/ts_ms
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 6 · Spark Structured Streaming → MinIO Landing (Iceberg)             │
+│ CDC topics → iceberg.landing.* (append-only, full Debezium envelope)       │
+│ data_platform/batch/spark/cdc_to_landing.py   MinIO :9000                  │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ iceberg.landing.*
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 7 · dbt Lakehouse Transformations                                     │
+│ landing → bronze (CDC flatten) → silver (MERGE/DELETE) → gold (KPIs)      │
+│ data_platform/dbt/   Airflow :8085 schedules every 30 min                  │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ iceberg.gold.gold_store_kpis
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 8 · Analytics / ML / LLM on Lakehouse                                │
+│ ├─ analytics layer  feat_store_performance, feat_customer_behavior (dbt)   │
+│ ├─ Feature Store    Feast offline: Iceberg  online: Redis :6566             │
+│ ├─ Semantic Layer   dbt MetricFlow — 9 named metrics                       │
+│ └─ Vector Index     Qdrant store_kpi_narratives + metric_definitions :6333  │
+│ data_platform/feature_store/   data_platform/vector_index/                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-- DAG-based agent orchestrator with intent routing, retry/fallback, and parallel tier execution
-- Composable agent skill framework with LLM tool-calling export and per-skill observability
-- Persona-aware responses for store managers and executives
-- Real-time KPI coverage across sales orders, appointments, POS invoices, inventory, and work orders
-- AWS Aurora MySQL as the operational source system for sales orders, appointments, POS invoices, and work orders
-- Hybrid context assembly merging streaming state, vector retrieval, and session memory
-- Observability and evaluation framework with metrics collection, LLM-as-judge evaluation, and Prometheus export
-- LLMOps prompt registry with versioning, lifecycle management, and A/B variant experimentation
-- Multi-model routing (Haiku/Sonnet/Opus) with automatic fallback on failure
-- Guardrails for prompt injection detection, PII scrubbing, and output quality enforcement
-- Structured LLM output via Pydantic-validated response models
-- Server-Sent Events streaming and async generation endpoints
-- MCP server exposing platform tools, resources, and prompts to any MCP-compatible client
-- API key authentication with RBAC (admin/operator/viewer) and per-key rate limiting
-- Persistent SQLite-backed session memory with TTL and cross-session knowledge accumulation
-- Multimodal (vision) support for image-based KPI chart analysis
-- CI/CD pipeline with lint, type checking, tests, coverage, and Docker smoke tests
-- Operational strategy outputs for under-performing store diagnosis, branded upsell, and promotion adjustment
+## Documentation
 
-## Glossary
-
-- Agentic Operational Intelligence Platform: Canonical product name for this repository and runtime system.
-- agentic-operational-intelligence-platform: Canonical package/release identifier used in project metadata.
-- Agentic Operational Intelligence Orchestrator: Canonical orchestration component that coordinates KPI, anomaly, promotion, and recommendation agents.
-- Store manager persona: User role focused on local, real-time operational diagnosis and execution.
-- Executive persona: User role focused on regional and enterprise KPI variance, prioritization, and strategy shifts.
-- Operational brief: Persona-aware summary that combines KPI state, active alerts, diagnosis, and priority actions.
-- KPI: Key Performance Indicator generated from real-time events across sales orders, appointments, POS invoices, inventory, and work orders.
-- AWS Aurora MySQL: System of record for transactional sales-order, appointment, POS-invoice, and work-order applications feeding the real-time KPI pipeline.
-- CDC topic naming convention: Kafka/MSK topics follow `retail_ops.aurora.<schema>.<table>`.
-- Bronze table naming convention: Landed CDC records follow `bronze.<table>_cdc`.
-- Silver table naming convention: Normalized operational tables follow `silver.<table>`.
-
-## Current Capabilities
-
-### API
-
-- FastAPI service with 7 route modules: query, kpi, alerts, operations, skills, streaming, and health
-- `POST /ask` — agentic Q&A with guardrails, intent routing, and DAG execution
-- `POST /ask/stream` — SSE streaming Q&A with real-time token delivery
-- `POST /ask/async` — async non-blocking generation
-- `POST /ask/agentic` — tool-calling agentic queries
-- `POST /kpi` — fetch KPI metrics for a store or region
-- `POST /kpi/enriched` — KPIs with semantic metadata, anomaly flags, and descriptions
-- `GET /kpi/catalog` — machine-readable KPI catalog (16 definitions)
-- `GET /alerts/{store_id}` — retrieve active alerts for a store
-- `POST /operations/brief` — persona-aware operational brief
-- `GET /skills` — list all registered agent skills with tool schemas
-- `POST /skills/{name}/invoke` — invoke a specific skill by name
-- `GET /usage` — LLM token usage and cost tracking for the current session
-- `GET /metrics` — Prometheus exposition format metrics export
-- `GET /health` — health check
-- API key authentication via `X-API-Key` header with RBAC and rate limiting
-
-### Agent Orchestration
-
-- DAG-based orchestrator with declarative agent dependency graph and topological tier execution
-- Intent-based task router classifying queries into KPI, anomaly, promotion, brief, or general QA intents
-- Per-intent subgraph extraction — only the required agents run for each query
-- Multi-turn conversation support with session memory tracking
-- Hybrid context assembly (streaming + vector + memory) wired into orchestrator Phase 0
-- Configurable retry policies with exponential backoff and fallback handlers per agent node
-- Parallel execution of independent agent nodes within each DAG tier
-- Full execution tracing with per-node timing, attempt counts, and fallback usage in every API response
-
-### Agent Skills
-
-- Composable skill framework with `Skill` ABC, typed `SkillDescriptor`, and `SkillRegistry`
-- Five built-in skills: `fetch_kpis`, `detect_anomalies`, `semantic_search`, `diagnose_signals`, `generate_narrative`
-- `to_tool_schemas()` exports all skills as LLM function-calling definitions
-- Agentic tool-calling loop via `agentic_query()` wiring skill registry into Claude's tools parameter
-- Per-skill observability instrumentation (latency, success/failure metrics)
-- Skills discoverable by name or tag; invocable via API or programmatically
-
-### LLM Layer
-
-- Anthropic Claude client abstraction with response caching (128-entry LRU), token tracking, and session cost summary
-- `generate()` — standard text generation with cache
-- `generate_with_tools()` — multi-turn tool-calling loop (up to 5 rounds)
-- `generate_stream()` — async SSE streaming generation
-- `generate_async()` — async non-blocking generation
-- `generate_with_image()` — multimodal vision input (PNG, JPEG, GIF, WebP)
-- Multi-model routing: Haiku (classification) → Sonnet (generation) → Opus (reasoning) with automatic fallback
-- Structured LLM output via Pydantic models: `KPIInsight`, `OperationalBriefResponse`, `AnomalyDiagnosisResponse`, `PromotionRecommendation`
-
-### Hybrid Context
-
-- `HybridContextAssembler` merges streaming state, vector/keyword retrieval, and session memory into a unified `ContextWindow`
-- `SessionMemory` with sliding-window eviction for multi-turn conversational coherence
-- `PersistentSessionMemory` (SQLite-backed) survives process restarts with TTL and cross-session knowledge accumulation
-- `StreamingStateStore` with TTL-based cache for real-time KPI snapshots and alerts
-
-### Guardrails
-
-- Input validation: prompt injection detection (7 regex patterns), PII scrubbing (SSN, credit card, email, phone), length limits
-- Output validation: blocked content patterns, hallucinated KPI detection, quality checks
-- Wired into `/ask` endpoint — prompt injection returns HTTP 400, PII is scrubbed transparently
-
-### Observability and Evaluation
-
-- `MetricsCollector` with counters, gauges, and histograms (Prometheus-compatible interface)
-- `GET /metrics` endpoint exporting Prometheus exposition format
-- `LLMEvaluator` with rule-based quality scoring for groundedness, actionability, conciseness, relevance, and persona-fit
-- `evaluate_with_llm()` — LLM-as-judge evaluation with rule-based fallback
-- `AgentPerformanceTracker` recording agent duration, retries, fallbacks, and LLM token usage
-- Automatic metrics emission from DAG executor on every agent node execution
-
-### LLMOps
-
-- Centralized `PromptRegistry` with semantic versioning and lifecycle states (draft → active → deprecated → retired)
-- Runtime API: `get()`, `register()`, `deprecate()`, `retire()`, `names()`, `versions()`, filtered `list_prompts()`
-- A/B variant experimentation via `ExperimentManager`: deterministic traffic splitting, per-variant metric collection, Welch's t-test significance testing
-- Four prompt templates: `operational_brief`, `kpi_explanation`, `anomaly_diagnosis`, `promotion_strategy`
-
-### Security
-
-- API key authentication via `X-API-Key` header with SHA-256 hashing
-- RBAC with three roles: admin (full access), operator (query + operations), viewer (read-only KPI/alerts)
-- Per-key sliding-window rate limiting (configurable per minute)
-- Environment-based key registration (`AOIP_API_KEY_ADMIN`, `AOIP_API_KEY_OPERATOR`, `AOIP_API_KEY_VIEWER`)
-- Dev bypass via `AOIP_AUTH_DISABLED=true`
-
-### MCP Server
-
-- Model Context Protocol server exposing 5 tools, 2 resources, and 2 prompts
-- Tools: `get_store_kpis`, `get_region_kpis`, `get_enriched_kpis`, `detect_alerts`, `search_knowledge_base`
-- Resources: `kpi://catalog`, `config://thresholds`
-- Prompts: `operational_brief`, `anomaly_investigation`
-- Compatible with Claude Desktop, VS Code Copilot, and any MCP client
-
-### Data Platform
-
-- Typed semantic KPI layer (`KPIRecord`, `StoreKPISnapshot`) with anomaly flags and LLM-ready summaries
-- Machine-readable KPI catalog (16 KPIs with unit, direction, thresholds, descriptions)
-- SQLite-backed queryable KPI data store with `KPIDataSource` protocol
-- Hybrid RAG with ChromaDB vector search + TF-IDF keyword search and reciprocal rank fusion
-- Domain and persona metadata filtering on RAG corpus
-- Enriched JSON schemas for 5 domains (appointment, sales order, POS invoice, work order, inventory)
-- Enriched alert rules with unit, direction, description, and remediation guidance
-- Streaming KPI aggregator logic with cross-domain operational metrics
-- Bronze, silver, and gold Databricks ingestion assets for Aurora MySQL modeling
-- Sample AWS DMS to Kafka/MSK CDC task spec
-
-### CI/CD
-
-- GitHub Actions workflow: lint (ruff), type check (pyright), test (pytest), coverage gate (60%)
-- Docker image build and smoke test on push to main
-- pyright basic mode type checking with workspace-wide configuration
-- ruff linting with Python 3.12 target
-
-## Source Systems
-
-The current project target assumes the following operating model:
-
-- AWS Aurora MySQL stores transactional data for the sales order system, appointment application, POS invoice activities, and work order activities.
-- Inventory signals may be sourced from Aurora MySQL or a downstream inventory service, but are modeled as part of the same operational KPI layer.
-- Change data capture from Aurora MySQL should feed the real-time event stream that drives KPI aggregation, anomaly detection, and executive/store-manager alerts.
-
-CDC naming conventions used by the reference assets:
-
-- Kafka/MSK topic: `retail_ops.aurora.<schema>.<table>`
-- Bronze landing table: `bronze.<table>_cdc`
-- Silver normalized table: `silver.<table>`
-- Gold KPI rollup table: `gold.store_realtime_kpis`
-
-## AI Operational Intelligence Focus
-
-This project is designed for two decision personas:
-
-- Store managers: real-time diagnosis for local under-performance, inventory constraints, service backlog, and conversion blockers.
-- Company executives: regional KPI variance monitoring, cross-store prioritization, and strategy shifts for promotion and margin improvement.
-
-The AI layer combines KPI signals and alerts across:
-
-- Sales order system on AWS Aurora MySQL
-- Appointment application on AWS Aurora MySQL
-- POS invoice activities on AWS Aurora MySQL
-- Inventory health signals
-- Work order activities on AWS Aurora MySQL
-
-The resulting recommendations help teams:
-
-- Diagnose under-performing stores quickly
-- Increase branded upsell mix using targeted scripts and bundles
-- Adjust store-level promotions based on inventory and operations readiness
-- Improve execution quality before scaling campaign spend
+| Doc | Contents |
+|-----|----------|
+| [Data Platform Architecture](docs/architecture_data_platform.md) | 8-stage pipeline · Kafka · Flink · MySQL ODS · Debezium · Spark · dbt Iceberg lakehouse · analytics/ML |
+| [AI Systems Architecture](docs/architecture_ai_systems.md) | Agents · LLM · RAG · orchestration · skills · guardrails · ADRs |
+| [Observability Architecture](docs/architecture_observability.md) | Metrics catalog · LLM evaluation · distributed tracing |
+| [Local Development Architecture](docs/architecture_local.md) | Docker Compose services · startup sequence · resource limits · endpoints |
+| [Kubernetes / Production Architecture](docs/architecture_amazon_eks.md) | EKS layout · AWS managed services · HPA · secrets · production replacements |
+| [System Overview](docs/system_overview.md) | 8-stage table · reference flowcharts · agent orchestration · implementation reference |
+| [KPI Definitions](docs/kpi_definitions.md) | 16 business KPIs with units, direction, and alert thresholds |
+| [Copilot UI](docs/copilot_ui.md) | Front-end integration guide · API priority order · auth |
+| [CI/CD Automation](docs/cicd_automation.md) | GitHub Actions pipeline · branch strategy · deployment · coverage gate |
+| [Runbook](docs/runbook.md) | Setup · make targets · per-stage commands · API reference · troubleshooting |
+| [ADRs](docs/adr/README.md) | 22 architecture decision records across data platform, AI systems, and infrastructure |
 
 ## Quick start
 
 ```bash
-uv sync --dev
-uv run uvicorn services.api.app:app --reload --port 8000
+make install        # create .venv and install all dependency groups
+make env            # create .env — add ANTHROPIC_API_KEY
+make up             # start all infrastructure services
+make produce        # start synthetic Kafka producer (15 canonical topics)
+make test           # run test suite
 ```
 
-### Run tests
-
-```bash
-uv run pytest -q              # 150 tests
-uv run pyright                # type checking
-uv run ruff check .           # linting
-```
-
-### Generate persona-aware operational brief
-
-```bash
-curl -X POST http://localhost:8000/operations/brief \
-  -H "Content-Type: application/json" \
-  -d '{"store_id":"245","region":"Phoenix","persona":"executive"}'
-```
-
-### Agentic Q&A
-
-```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Why are Phoenix sales down today and what promotion should we adjust?","store_id":"245","region":"Phoenix"}'
-```
-
-### Streaming Q&A (SSE)
-
-```bash
-curl -N -X POST http://localhost:8000/ask/stream \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Summarize store 245 KPIs","store_id":"245"}'
-```
-
-### MCP Server
-
-```bash
-uv run python -m services.mcp_server
-```
-
-## Repo Layout
+## Repo layout
 
 ```text
 ai_layer/
   agents/            KPI, anomaly, promotion, recommendation agents
-  orchestration/     DAG engine, intent router, DAG executor with retry/fallback
-  skills/            Skill ABC, catalog of built-in skills, singleton registry
-  rag/               ChromaDB + TF-IDF hybrid search retriever and corpus data
+  orchestration/     DAG engine, intent router, executor with retry/fallback
+  skills/            Skill ABC, built-in skill catalog, singleton registry
+  rag/               ChromaDB + TF-IDF hybrid search retriever
   memory/            Persistent SQLite-backed session memory
   context.py         Hybrid context assembler (streaming + vector + memory)
-  experimentation.py A/B prompt experimentation with traffic splitting and significance testing
-  guardrails.py      Input/output validation, prompt injection detection, PII scrubbing
-  llm.py             Anthropic Claude client (sync, async, streaming, vision, tool-calling)
+  experimentation.py A/B prompt experimentation with significance testing
+  guardrails.py      Prompt injection detection, PII scrubbing, output validation
+  llm.py             Anthropic Claude client (sync/async/stream/vision/tools)
   model_router.py    Multi-model routing (Haiku/Sonnet/Opus) with fallback
   prompts.py         Versioned prompt registry with lifecycle management
-  structured_output.py  Pydantic-validated structured LLM responses
-  tool_calling.py    Agentic tool-calling loop wiring skills to Claude tools
-config/              Runtime settings, Aurora MySQL / CDC placeholders
+  structured_output.py  Pydantic-validated LLM response models
+  tool_calling.py    Agentic tool-calling loop
+config/              Runtime settings (Aurora MySQL, CDC, LLM, Redis)
 services/
-  api/               FastAPI app with query, kpi, alerts, operations, skills, streaming routes
-    auth.py          API key authentication, RBAC, and rate limiting
-  mcp_server.py      Model Context Protocol server (5 tools, 2 resources, 2 prompts)
+  api/               FastAPI (7 route modules: query, kpi, alerts, operations, skills, streaming, health)
+  mcp_server.py      MCP server (5 tools, 2 resources, 2 prompts)
   scheduler/         Daily summary job
 data_platform/
   kpi_catalog.yaml   Machine-readable KPI definitions (16 KPIs)
-  kpi_store.py       SQLite-backed queryable KPI data store
-  semantic_layer.py  Typed KPI records with anomaly detection and LLM-ready summaries
-  schemas/           Enriched JSON schemas for 5 operational domains
-  batch/             Databricks SQL and notebooks (bronze/silver/gold)
-  streaming/         Flink KPI aggregator logic
-alerts/              Alert engine, enriched threshold config, dispatch channels
-observability/       Metrics collector, LLM evaluator, agent performance tracker
-tests/               150 unit tests across agents, orchestration, API, data, and AI gaps
-docs/                Runbook and 12 ADRs
-.github/workflows/   CI/CD pipeline (lint, type check, test, Docker)
-container/           Dockerfile and docker-compose.yaml
+  kpi_store.py       SQLite-backed KPI data store
+  semantic_layer.py  Typed KPI records with anomaly detection
+  schema/            Avro schemas for 5 canonical topic domains
+  ddl/               MySQL DDL init scripts (retail_ops_sink)
+  producer/          Synthetic Avro message producer (15 topics)
+  batch/spark/       PySpark Structured Streaming — CDC → MinIO landing (Iceberg)
+  dbt/               dbt Core project — staging → bronze → silver → gold → analytics
+    models/
+      staging/       Views over iceberg.landing (source declarations)
+      bronze/        CDC envelope flattening, append-only
+      silver/        CDC merge, current-state tables
+      gold/          KPI aggregations (gold_store_kpis)
+      analytics/     Feature engineering (rolling windows, RFM, churn risk)
+      semantic/      MetricFlow semantic models + 9 named metrics
+    macros/          generate_schema_name, delete_cdc_rows
+  feature_store/     Feast — offline: Iceberg analytics; online: Redis
+  vector_index/      Qdrant indexer — store_kpi_narratives, metric_definitions
+  flink_job/         14 PyFlink jobs (canonical → PDM sink topics)
+    start_flink_job.sh        submit one pipeline
+    start_flink_job_all.py    submit all 14
+alerts/              Alert engine, threshold config, MS Teams dispatch
+observability/       Metrics, LLM evaluator, agent performance tracker
+tests/               Unit tests (agents, orchestration, API, data, AI gaps)
+docs/                Runbook + 12 ADRs + architecture diagram
+Makefile             All dev workflows — run `make help`
+container/
+  docker-compose.yaml  Full local stack (~30 services)
+  Dockerfile           Platform API image
+  flink/Dockerfile     Flink cluster image (PyFlink + Iceberg connector JAR)
+  flink/pom.xml        Maven build for the Kafka + Avro fat JAR
+  airflow/Dockerfile   Airflow image (dbt-spark pre-installed)
+  airflow/dags/        dbt_pipeline.py — schedules bronze→silver→gold→analytics
 ```
 
-## Design Intent
+## Local stack
 
-The project is intentionally implementation-ready and extensible. Replace in-memory/local components with enterprise services as you scale:
+All dev workflows go through `make`. Run `make help` for the full reference.
 
-- AWS DMS, Debezium, or application CDC from Aurora MySQL into Kafka/MSK for real-time topics
-- AWS Managed Service for Apache Flink or Databricks Structured Streaming for KPI computation
-- Delta Lake for bronze/silver/gold KPI tables
-- Databricks Vector Search, OpenSearch, Azure AI Search, or pgvector for vector retrieval
-- Redis or DynamoDB for persistent session memory (swap `PersistentSessionMemory` backend)
-- Teams/Jira/ServiceNow for alert and incident workflow integration
-- Prometheus/Grafana for production metrics (connect to `/metrics` endpoint)
+### Infrastructure
+
+```bash
+make up                               # start all services (Kafka, MySQL, Redis, app, Conduktor…)
+make produce                          # start synthetic Avro producer (15 canonical topics)
+make down                             # stop all containers
+```
+
+### Flink cluster
+
+```bash
+make flink-jar                        # build Kafka + Avro connector fat JAR (Maven)
+make flink-up                         # start JobManager + TaskManager
+make flink-run JOB=appointment        # submit one pipeline
+make flink-submit                     # submit all 14 pipelines
+```
+
+### Iceberg lakehouse
+
+```bash
+make lake-up                          # MinIO + Iceberg REST + Spark cluster + Thrift Server
+make lake-stream                      # CDC → landing Spark streaming job
+make dbt-deps && make dbt-run         # install packages then run full dbt DAG
+make dbt-run LAYER=analytics          # run single layer
+```
+
+### Airflow
+
+```bash
+make airflow-up                       # build + start (webserver + scheduler)
+make airflow-trigger                  # fire dbt_lakehouse_pipeline manually
+```
+
+### Analytics layer
+
+```bash
+make analytics-up                     # start Qdrant + Feast feature server
+make analytics-materialize            # push analytics features to Redis
+make analytics-index                  # build Qdrant vector indexes from gold
+```
+
+### Local API development
+
+```bash
+make dev                              # FastAPI hot-reload on port 8000
+make test && make lint && make typecheck
+```
+
+## Service endpoints
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Platform API | http://localhost:8000 | `X-API-Key` header |
+| Conduktor | http://localhost:8080 | admin@conduktor.io / admin |
+| Schema Registry | http://localhost:8081 | — |
+| Flink Dashboard | http://localhost:8082 | — |
+| Kafka Connect | http://localhost:8083 | — |
+| Airflow UI | http://localhost:8085 | admin / admin |
+| Spark Master | http://localhost:4040 | — |
+| Iceberg REST | http://localhost:8181 | — |
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
+| Qdrant | http://localhost:6333/dashboard | — |
+| Feast Server | http://localhost:6566 | — |
+
+## Data conventions
+
+| Concept | Convention |
+|---------|------------|
+| CDC Kafka topic | `retail_ops.aurora.retail_ops.<table>` |
+| Iceberg landing | `iceberg.landing.<table>` (Spark-managed, append-only) |
+| Iceberg bronze | `iceberg.bronze.<table>` (CDC flattened, append) |
+| Iceberg silver | `iceberg.silver.<table>` (current state, merge + delete) |
+| Iceberg gold | `iceberg.gold.gold_store_kpis` (daily KPI aggregation) |
+| Iceberg analytics | `iceberg.analytics.feat_*` (ML feature tables) |
+| Feast online | Redis DB 1 (feature key: `store_id` or `customer_id`) |
+| Qdrant collections | `store_kpi_narratives`, `metric_definitions` |
+
+## Design intent
+
+Built around an open-source, locally-runnable data lakehouse — swap components for cloud-managed equivalents as you scale:
+
+| Local (this repo) | Production equivalent |
+|---|---|
+| Kafka (KRaft, 3 brokers) | AWS MSK / Confluent Cloud |
+| Flink standalone cluster | AWS Managed Flink / Databricks |
+| Spark + MinIO (Iceberg) | AWS EMR + S3 + Glue Catalog |
+| dbt-spark (Thrift Server) | Databricks SQL / dbt Cloud |
+| Airflow (LocalExecutor) | MWAA / Astronomer |
+| Redis (online features) | DynamoDB / AWS ElastiCache |
+| Qdrant (vector search) | OpenSearch / Pinecone |
+| Feast (feature store) | AWS SageMaker Feature Store |
+| ChromaDB (RAG) | AWS OpenSearch / pgvector |
+
+
+- Anthropic Claude client abstraction with response caching (128-entry LRU), token tracking, and session cost summary
+- `generate()` — standard text generation with cache
