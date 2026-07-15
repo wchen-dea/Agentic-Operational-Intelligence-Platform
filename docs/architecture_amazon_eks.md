@@ -229,6 +229,6 @@ spec:
 | ADR | Decision | Status |
 |-----|----------|--------|
 | [ADR-001](adr/001-aurora-mysql-as-source-system.md) | Aurora MySQL as source system — binlog CDC via DMS or Debezium | Accepted |
-| [ADR-003](adr/003-cdc-to-kafka-msk-ingestion.md) | CDC to Kafka/MSK for real-time ingestion | Accepted |
-| [ADR-004](adr/004-medallion-lakehouse-architecture.md) | Medallion lakehouse on Iceberg (landing/bronze/silver/gold/analytics) | Accepted |
-| [ADR-006](adr/006-uv-for-dependency-management.md) | uv for Python dependency management — deterministic Docker builds | Accepted |
+| [ADR-005](adr/005-debezium-cdc-mysql-ods-to-kafka.md) | Debezium CDC from MySQL ODS to Kafka | Accepted |
+| [ADR-008](adr/008-medallion-lakehouse-dbt-core.md) | Medallion lakehouse on Iceberg (landing/bronze/silver/gold/analytics) | Accepted |
+| [ADR-022](adr/022-uv-python-dependency-management.md) | uv for Python dependency management — deterministic Docker builds | Accepted |

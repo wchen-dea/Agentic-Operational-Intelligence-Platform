@@ -220,10 +220,10 @@ graph LR
 
 | ADR | Decision | Status |
 |-----|----------|--------|
-| [ADR-002](adr/002-anthropic-claude-as-llm.md) | Anthropic Claude as LLM — Haiku/Sonnet/Opus routing with fallback | Accepted |
-| [ADR-005](adr/005-persona-aware-agent-orchestration.md) | Persona-aware orchestration (`store_manager` / `executive`) | Accepted |
-| [ADR-007](adr/007-agent-skill-framework.md) | Skill ABC + SkillRegistry with auto-instrumented invocation | Accepted |
-| [ADR-008](adr/008-dag-orchestration-with-intent-routing.md) | DAG-based execution with intent routing and tier-parallel agents | Accepted |
-| [ADR-009](adr/009-hybrid-context-assembly.md) | Hybrid context: streaming state + vector retrieval + session memory | Accepted |
-| [ADR-011](adr/011-llmops-prompt-versioning.md) | Versioned PromptRegistry + A/B ExperimentManager | Accepted |
-| [ADR-012](adr/012-token-cost-efficiency.md) | LRU response cache, per-call UsageTracking, compact prompts | Accepted |
+| [ADR-011](adr/011-anthropic-claude-as-llm.md) | Anthropic Claude as LLM — Haiku/Sonnet/Opus routing with fallback | Accepted |
+| [ADR-013](adr/013-persona-aware-orchestration.md) | Persona-aware orchestration (`store_manager` / `executive`) | Accepted |
+| [ADR-015](adr/015-agent-skill-framework.md) | Skill ABC + SkillRegistry with auto-instrumented invocation | Accepted |
+| [ADR-014](adr/014-dag-orchestration-intent-routing.md) | DAG-based execution with intent routing and tier-parallel agents | Accepted |
+| [ADR-016](adr/016-hybrid-context-assembly.md) | Hybrid context: streaming state + vector retrieval + session memory | Accepted |
+| [ADR-017](adr/017-llmops-prompt-versioning.md) | Versioned PromptRegistry + A/B ExperimentManager | Accepted |
+| [ADR-018](adr/018-token-cost-efficiency.md) | LRU response cache, per-call UsageTracking, compact prompts | Accepted |

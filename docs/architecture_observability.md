@@ -165,5 +165,5 @@ AOIP_OTEL__SERVICE_NAME=aoip
 
 | ADR | Decision | Status |
 |-----|----------|--------|
-| [ADR-010](adr/010-observability-and-evaluation.md) | `MetricsCollector` + `LLMEvaluator` + `AgentPerformanceTracker` with Prometheus export | Accepted |
-| [ADR-012](adr/012-token-cost-efficiency.md) | Per-call `LLMUsage` tracking with session-level cost summaries | Accepted |
+| [ADR-019](adr/019-observability-llm-evaluation.md) | `MetricsCollector` + `LLMEvaluator` + `AgentPerformanceTracker` with Prometheus export | Accepted |
+| [ADR-018](adr/018-token-cost-efficiency.md) | Per-call `LLMUsage` tracking with session-level cost summaries | Accepted |
