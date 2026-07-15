@@ -27,4 +27,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
          r=urllib.request.urlopen('http://localhost:8000/health',timeout=4); \
          sys.exit(0 if r.status==200 else 1)"
 
-CMD ["/app/.venv/bin/uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "ai_system.gateway.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

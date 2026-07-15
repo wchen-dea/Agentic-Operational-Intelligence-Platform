@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "prd", "develop"]
+    branches: ["qa", "prd", "develop"]
   pull_request:
-    branches: ["main", "prd"]
+    branches: ["qa", "prd", "develop"]
 
 # Cancel in-progress runs for the same branch on new pushes
 concurrency:
@@ -70,7 +70,7 @@ jobs:
       - name: Run tests with coverage
         run: >
           uv run pytest tests/
-          --cov=ai_layer
+          --cov=ai_system
           --cov=services
           --cov=alerts
           --cov=data_platform

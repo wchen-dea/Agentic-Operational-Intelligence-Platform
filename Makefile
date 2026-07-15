@@ -167,7 +167,7 @@ topics:
 # ── App ───────────────────────────────────────────────────────────────────────
 .PHONY: dev
 dev:
-	$(PYTHON) -m uvicorn services.api.main:app --reload --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn ai_system.gateway.api.main:app --reload --host 0.0.0.0 --port 8000
 
 .PHONY: mcp
 mcp:

@@ -11,7 +11,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # 16. Persistent agent memory (SQLite-backed)
 # ---------------------------------------------------------------------------
-from ai_layer.memory.persistent_memory import PersistentSessionMemory
+from ai_system.retrieval.memory import PersistentSessionMemory
 
 
 def test_persistent_memory_add_and_retrieve(tmp_path):
@@ -105,7 +105,7 @@ def test_persistent_memory_metadata(tmp_path):
 # ---------------------------------------------------------------------------
 # 17. A/B prompt experimentation
 # ---------------------------------------------------------------------------
-from ai_layer.experimentation import ExperimentManager, VariantMetrics, _normal_cdf
+from ai_system.experimentation.manager import ExperimentManager, VariantMetrics, _normal_cdf
 
 
 def test_experiment_create():
@@ -198,7 +198,7 @@ def test_normal_cdf():
 # ---------------------------------------------------------------------------
 # 18. Multimodal support
 # ---------------------------------------------------------------------------
-from ai_layer.llm import _SUPPORTED_IMAGE_TYPES, generate_with_image
+from ai_system.core.llm import _SUPPORTED_IMAGE_TYPES, generate_with_image
 
 
 def test_multimodal_supported_types():
@@ -231,7 +231,7 @@ def test_multimodal_accepts_b64_string():
 # ---------------------------------------------------------------------------
 # 19. PromptRegistry enhancements
 # ---------------------------------------------------------------------------
-from ai_layer.prompts import (
+from ai_system.core.prompts import (
     PromptRegistry,
     PromptTemplate,
     PromptLifecycle,

@@ -77,7 +77,7 @@ ignore = ["E501"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
-include = ["ai_layer", "services", "alerts", "data_platform", "config", "observability"]
+include = ["ai_system", "ai_system.gateway", "ai_system.alerting", "data_platform", "ai_system.config", "observability"]
 exclude = ["tests", ".venv", "**/__pycache__"]
 reportMissingImports = true
 reportMissingTypeStubs = false

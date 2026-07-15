@@ -551,7 +551,7 @@ services:
         condition: service_healthy
     volumes:
       - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
-      - ../config:/opt/flink/usrlib/config:ro
+      - ../ai_system/config:/opt/flink/usrlib/config:ro
     deploy:
       resources:
         limits:
@@ -586,7 +586,7 @@ services:
         condition: service_healthy
     volumes:
       - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
-      - ../config:/opt/flink/usrlib/config:ro
+      - ../ai_system/config:/opt/flink/usrlib/config:ro
     deploy:
       resources:
         limits:
@@ -652,7 +652,7 @@ services:
           -pyexec python3
     volumes:
       - ../data_platform/flink_job:/opt/flink/usrlib/flink_job:ro
-      - ../config:/opt/flink/usrlib/config:ro
+      - ../ai_system/config:/opt/flink/usrlib/config:ro
     depends_on:
       flink-jobmanager:
         condition: service_healthy

@@ -12,9 +12,9 @@ LLM API costs are proportional to token consumption. Without active cost managem
 
 Implement a four-layer token cost strategy:
 
-1. **SHA-256 LRU response cache** (128 entries, in `ai_layer/llm.py`) — identical prompts (same text + model) return cached responses; zero API cost for cache hits. Cache key = SHA-256(model + prompt_text).
+1. **SHA-256 LRU response cache** (128 entries, in `ai_system/llm.py`) — identical prompts (same text + model) return cached responses; zero API cost for cache hits. Cache key = SHA-256(model + prompt_text).
 
-2. **Model routing** (`ai_layer/model_router.py`) — routes classification tasks to Haiku (~6× cheaper than Sonnet); reserves Sonnet for generation; uses Opus only for complex reasoning. Reduces cost by ~60% for intent classification workloads.
+2. **Model routing** (`ai_system/model_router.py`) — routes classification tasks to Haiku (~6× cheaper than Sonnet); reserves Sonnet for generation; uses Opus only for complex reasoning. Reduces cost by ~60% for intent classification workloads.
 
 3. **Dynamic `max_tokens` caps** — each output type is capped at the minimum sufficient length:
    - Intent classification: 50 tokens.
@@ -46,4 +46,4 @@ Implement a four-layer token cost strategy:
 
 ### Neutral / constraints
 - Cache is cleared on API server restart — intentional, to avoid serving stale responses after prompt updates.
-- Token prices are hard-coded in `ai_layer/llm.py`; update when Anthropic changes pricing.
+- Token prices are hard-coded in `ai_system/llm.py`; update when Anthropic changes pricing.

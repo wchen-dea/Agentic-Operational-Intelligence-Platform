@@ -1,10 +1,10 @@
 import tempfile
 
-from ai_layer.rag.retrieval.hybrid_search import LocalHybridSearch
+from ai_system.retrieval.hybrid_search import LocalHybridSearch
 
 
 def test_hybrid_search_valid_corpus():
-    from config.settings import settings
+    from ai_system.config.settings import settings
 
     search = LocalHybridSearch(settings.rag_corpus_path)
     results = search.search("promotion strategy", top_k=2)
