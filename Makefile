@@ -1,10 +1,17 @@
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
 
-COMPOSE       := docker compose
+COMPOSE_FILE  := container/docker-compose.yaml
+COMPOSE       := docker compose -f $(COMPOSE_FILE)
 VENV          := .venv
 UV            := uv
 PYTHON        := $(VENV)/bin/python
+
+# Local host endpoints for helper scripts run outside containers.
+LOCAL_CONNECT_URL         := http://localhost:8083
+LOCAL_SCHEMA_REGISTRY_URL := http://localhost:8081
+LOCAL_KAFKA_BROKERS       := localhost:9092,localhost:9093,localhost:9094
+LOCAL_MYSQL_URL           := jdbc:mysql://localhost:3306/retail_ops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&sessionVariables=sql_mode=''
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 BOLD  := \033[1m
@@ -15,7 +22,7 @@ CYAN  := \033[36m
 # ── Help ──────────────────────────────────────────────────────────────────────
 .PHONY: help
 help:
-	@printf "$(BOLD)Agentic Operational Intelligence Platform$(RESET)\n\n"
+	@printf "$(BOLD)Agentic Operational Intelligence Platform (local development)$(RESET)\n\n"
 	@printf "$(CYAN)Setup$(RESET)\n"
 	@printf "  %-28s %s\n" "make install"           "Create .venv and install all dependency groups"
 	@printf "  %-28s %s\n" "make install-streaming" "Install streaming extras (confluent-kafka, fastavro …)"
@@ -28,7 +35,6 @@ help:
 	@printf "  %-28s %s\n" "make ps"                "Show container status"
 	@printf "  %-28s %s\n" "make logs"              "Tail logs for all services (Ctrl-C to exit)"
 	@printf "  %-28s %s\n" "make logs-app"          "Tail app service logs"
-	@printf "  %-28s %s\n" "make logs-conduktor"    "Tail Conduktor console logs"
 	@printf "\n$(CYAN)Kafka / Schemas$(RESET)\n"
 	@printf "  %-28s %s\n" "make register-schemas"  "Register all Avro schemas into Schema Registry"
 	@printf "  %-28s %s\n" "make register-connectors" "Register JDBC Sink connectors for PDM tables"
@@ -46,29 +52,6 @@ help:
 	@printf "  %-28s %s\n" "make lint"              "Ruff lint check"
 	@printf "  %-28s %s\n" "make fmt"               "Ruff auto-format"
 	@printf "  %-28s %s\n" "make typecheck"         "Pyright type check"
-	@printf "\n$(CYAN)Conduktor$(RESET)\n"
-	@printf "  %-28s %s\n" "make conduktor-restart" "Restart the Conduktor console container"
-	@printf "  %-28s %s\n" "make conduktor-health"  "Check Conduktor health endpoint"
-	@printf "\n$(CYAN)Lakehouse (Spark + Iceberg + dbt)$(RESET)\n"
-	@printf "  %-28s %s\n" "make lake-up"           "Start MinIO, Iceberg REST catalog, Spark cluster"
-	@printf "  %-28s %s\n" "make lake-stream"       "Start Spark CDC streaming (landing layer)"
-	@printf "  %-28s %s\n" "make lake-down"         "Stop the lakehouse stack"
-	@printf "  %-28s %s\n" "make dbt-run"           "Run all dbt layers (bronze → silver → gold)"
-	@printf "  %-28s %s\n" "make dbt-run LAYER=<l>" "Run a single dbt layer (bronze|silver|gold)"
-	@printf "  %-28s %s\n" "make dbt-test"          "Run dbt tests"
-	@printf "  %-28s %s\n" "make dbt-deps"          "Install dbt packages"
-	@printf "  %-28s %s\n" "make minio-ui"          "Print MinIO console URL"
-	@printf "\n$(CYAN)Airflow$(RESET)\n"
-	@printf "  %-28s %s\n" "make airflow-up"        "Build and start Airflow (webserver + scheduler)"
-	@printf "  %-28s %s\n" "make airflow-down"      "Stop Airflow services"
-	@printf "  %-28s %s\n" "make airflow-trigger"   "Trigger the dbt pipeline DAG manually"
-	@printf "  %-28s %s\n" "make logs-airflow"      "Tail Airflow scheduler logs"
-	@printf "\n$(CYAN)Analytics (Feature Store + Semantic Layer + Vector Index)$(RESET)\n"
-	@printf "  %-28s %s\n" "make analytics-up"      "Start Qdrant + Feast feature server"
-	@printf "  %-28s %s\n" "make analytics-materialize" "Materialize features to Redis (Feast)"
-	@printf "  %-28s %s\n" "make analytics-index"   "Build Qdrant vector indexes from gold layer"
-	@printf "  %-28s %s\n" "make analytics-index-dry" "Dry-run: print index payloads without upserting"
-	@printf "  %-28s %s\n" "make analytics-down"    "Stop Qdrant + Feast"
 	@printf "\n$(CYAN)Flink$(RESET)\n"
 	@printf "  %-28s %s\n" "make flink-jar"         "Build connector fat JAR with Maven (required before flink-up)"
 	@printf "  %-28s %s\n" "make flink-up"          "Build and start JobManager + TaskManager"
@@ -80,6 +63,12 @@ help:
 	@printf "  %-28s %s\n" "make flink-pipelines"   "List available pipeline names"
 	@printf "  %-28s %s\n" "make logs-flink-jm"     "Tail JobManager logs"
 	@printf "  %-28s %s\n" "make logs-flink-tm"     "Tail TaskManager logs"
+	@printf "\n$(CYAN)Note$(RESET)\n"
+	@printf "  %-28s %s\n" "make help-full"         "Show all available targets"
+
+.PHONY: help-full
+help-full:
+	@$(MAKE) -prRn : 2>/dev/null | awk -F':' '/^[a-zA-Z0-9_.-]+:$$/ {print $$1}' | sort -u
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 .PHONY: install
@@ -136,14 +125,22 @@ logs-conduktor:
 # ── Kafka / Schemas ───────────────────────────────────────────────────────────
 .PHONY: register-schemas
 register-schemas:
+	SCHEMA_REGISTRY_URL=$(LOCAL_SCHEMA_REGISTRY_URL) \
+	SCHEMAS_DIR=data_platform/schema \
 	$(PYTHON) container/scripts/register_schemas.py
 
 .PHONY: register-connectors
 register-connectors:
+	CONNECT_URL=$(LOCAL_CONNECT_URL) \
+	SCHEMA_REGISTRY_URL=$(LOCAL_SCHEMA_REGISTRY_URL) \
+	MYSQL_URL=$(LOCAL_MYSQL_URL) \
 	$(PYTHON) container/scripts/register_connectors.py
 
 .PHONY: register-cdc
 register-cdc:
+	CONNECT_URL=$(LOCAL_CONNECT_URL) \
+	MYSQL_HOST=localhost \
+	KAFKA_BOOTSTRAP_SERVERS=$(LOCAL_KAFKA_BROKERS) \
 	$(PYTHON) container/scripts/register_cdc_connector.py
 
 .PHONY: produce
@@ -167,11 +164,11 @@ topics:
 # ── App ───────────────────────────────────────────────────────────────────────
 .PHONY: dev
 dev:
-	$(PYTHON) -m uvicorn ai_systems.gateway.api.main:app --reload --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn ai_systems.gateway.api.app:app --reload --host 0.0.0.0 --port 8000
 
 .PHONY: mcp
 mcp:
-	$(PYTHON) services/mcp_server.py
+	$(PYTHON) ai_systems/gateway/mcp/server.py
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 .PHONY: test
