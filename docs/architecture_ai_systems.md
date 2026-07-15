@@ -152,17 +152,17 @@ sequenceDiagram
 
 | Layer | Role | Implementation |
 |-------|------|---------------|
-| **LLM** | Natural-language generation, intent classification, diagnosis | Anthropic Claude (`claude-sonnet-4`) · `ModelRouter` (Haiku → Sonnet → Opus) · `ai_system/llm.py` |
-| **Vector Database** | Semantic search over operational knowledge corpus | ChromaDB (persistent) + TF-IDF (sparse) with reciprocal rank fusion · `ai_system/rag/` |
+| **LLM** | Natural-language generation, intent classification, diagnosis | Anthropic Claude (`claude-sonnet-4`) · `ModelRouter` (Haiku → Sonnet → Opus) · `ai_systems/llm.py` |
+| **Vector Database** | Semantic search over operational knowledge corpus | ChromaDB (persistent) + TF-IDF (sparse) with reciprocal rank fusion · `ai_systems/rag/` |
 | **Long-term AI search** | KPI narrative search, metric definition lookup | Qdrant `store_kpi_narratives` + `metric_definitions` · `data_platform/vector_index/` |
 | **Feature serving** | Low-latency ML feature retrieval for inference | Feast online store (Redis) · `data_platform/feature_store/` |
 | **Semantic metrics** | Dimension-aware business metric queries | dbt MetricFlow 9 named metrics · `data_platform/dbt/models/semantic/` |
-| **Orchestration** | DAG-based agent execution with intent routing | `ai_system/orchestration/` — dag, router, executor |
-| **Skills** | Composable LLM tool-calling capabilities | `ai_system/skills/` — SkillRegistry + 5 built-in skills |
-| **Guardrails** | Input validation, output quality enforcement | `ai_system/guardrails.py` |
-| **Memory** | Multi-turn session coherence | `ai_system/memory/persistent_memory.py` (SQLite) |
-| **Prompts** | Versioned, A/B-tested prompt templates | `ai_system/prompts.py` — PromptRegistry + ExperimentManager |
-| **Structured output** | Typed, validated LLM responses | `ai_system/structured_output.py` — Pydantic models |
+| **Orchestration** | DAG-based agent execution with intent routing | `ai_systems/orchestration/` — dag, router, executor |
+| **Skills** | Composable LLM tool-calling capabilities | `ai_systems/skills/` — SkillRegistry + 5 built-in skills |
+| **Guardrails** | Input validation, output quality enforcement | `ai_systems/guardrails.py` |
+| **Memory** | Multi-turn session coherence | `ai_systems/memory/persistent_memory.py` (SQLite) |
+| **Prompts** | Versioned, A/B-tested prompt templates | `ai_systems/prompts.py` — PromptRegistry + ExperimentManager |
+| **Structured output** | Typed, validated LLM responses | `ai_systems/structured_output.py` — Pydantic models |
 
 ## Design principle
 

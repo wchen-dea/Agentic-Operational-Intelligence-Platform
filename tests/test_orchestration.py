@@ -1,8 +1,8 @@
 """Tests for the orchestration layer: DAG, router, and executor."""
 
-from ai_system.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
-from ai_system.orchestration.router import IntentRouter, Intent
-from ai_system.orchestration.executor import DAGExecutor
+from ai_systems.orchestration.dag import AgentDAG, AgentNode, RetryPolicy
+from ai_systems.orchestration.router import IntentRouter, Intent
+from ai_systems.orchestration.executor import DAGExecutor
 
 
 class TestAgentDAG:

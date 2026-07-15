@@ -12,7 +12,7 @@ Early versions of the platform used a fixed sequential pipeline (KPI → Anomaly
 
 Replace the fixed pipeline with a declarative **`AgentDAG`** with three components:
 
-1. **`IntentRouter`** (`ai_system/orchestration/router.py`) — classifies query intent using two-phase matching:
+1. **`IntentRouter`** (`ai_systems/orchestration/router.py`) — classifies query intent using two-phase matching:
    - Phase 1: rule-based regex keyword matching (fast, no API call).
    - Phase 2 (future): LLM-based classification for ambiguous queries.
    - Output: `{intent, confidence, required_agents}`.
@@ -22,7 +22,7 @@ Replace the fixed pipeline with a declarative **`AgentDAG`** with three componen
    - `anomaly_check` → [kpi, anomaly, rag_search]
    - `operational_brief` → [kpi, anomaly, promotion, recommendation, rag_search]
 
-3. **`DAGExecutor`** (`ai_system/orchestration/executor.py`) — executes tiers in topological order:
+3. **`DAGExecutor`** (`ai_systems/orchestration/executor.py`) — executes tiers in topological order:
    - Independent nodes within a tier run in parallel (via `asyncio.gather`).
    - Per-node retry with exponential backoff (`RetryPolicy`).
    - Circuit breaker: aborts if a tier fails after all retries exhausted.
@@ -50,5 +50,5 @@ Replace the fixed pipeline with a declarative **`AgentDAG`** with three componen
 - Phase 1 intent routing (regex) can misclassify ambiguous queries — Phase 2 (LLM classification) is planned but not yet implemented.
 
 ### Neutral / constraints
-- DAG nodes are defined in `ai_system/orchestration/dag.py` with `AgentNode(name, dependencies, agent)`.
+- DAG nodes are defined in `ai_systems/orchestration/dag.py` with `AgentNode(name, dependencies, agent)`.
 - The executor emits `agent_duration_ms`, `agent_executions_total`, and `agent_failures_total` metrics on every node execution.

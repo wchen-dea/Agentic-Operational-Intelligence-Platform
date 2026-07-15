@@ -16,7 +16,7 @@ Use **Apache Avro** as the wire format for all canonical Kafka topics, with sche
 - Schemas are registered at startup via `container/scripts/register_schemas.py`.
 - The Schema Registry enforces **backward compatibility** by default (new fields must have defaults).
 - The Flink Table API jobs consume topics using the `avro-confluent` format, which resolves schemas from the registry at job start.
-- The `kda-dependencies-1.20.0.jar` (built via `container/flink/pom.xml`) bundles `flink-sql-connector-kafka` and `flink-sql-avro-confluent-registry`.
+- The `kda-dependencies-2.2.0.jar` (built via `container/flink/pom.xml`) bundles `flink-sql-connector-kafka` and `flink-sql-avro-confluent-registry`.
 
 Topic naming convention: `Canonical<Domain><Entity>` (e.g. `CanonicalSalesforceCrmAppointment`).
 

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from ai_system.gateway.api.app import app
+from ai_systems.gateway.api.app import app
 
 client = TestClient(app)
 

@@ -372,7 +372,7 @@ class AuroraMySQLKPISource:
         except ImportError as exc:
             raise ImportError("pymysql is required: uv add pymysql") from exc
 
-        from ai_system.config.settings import settings as s
+        from ai_systems.config.settings import settings as s
 
         password = _os.environ.get("AURORA_PASSWORD")
         if not password:
@@ -658,7 +658,7 @@ def get_history_store() -> KPIHistoryStore:
     """Return the module-level KPI history store singleton."""
     global _history_store
     if _history_store is None:
-        from ai_system.config.settings import settings
+        from ai_systems.config.settings import settings
         from pathlib import Path
 
         db_path = str(Path(settings.rag_corpus_path).parent.parent / ".data" / "kpi_history.db")
@@ -669,7 +669,7 @@ def get_history_store() -> KPIHistoryStore:
 
 def build_kpi_source() -> KPIDataSource:
     """Factory: return the appropriate KPI source based on settings."""
-    from ai_system.config.settings import settings
+    from ai_systems.config.settings import settings
 
     src = settings.kpi_source
     if src == "aurora_mysql":
@@ -708,7 +708,7 @@ def fetch_store_kpis(
     Returns:
         Flat dict (backward-compatible) or StoreKPISnapshot if enrich=True.
     """
-    from ai_system.config.settings import settings
+    from ai_systems.config.settings import settings
 
     src = source or get_default_source()
     source_label = settings.kpi_source if not source else "override"

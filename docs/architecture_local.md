@@ -71,10 +71,10 @@ graph TB
 
 | Container | Image | Ports (host:container) | Role |
 |-----------|-------|----------------------|------|
-| `broker1` | confluentinc/cp-kafka:7.7.0 | 9092, 9101 (JMX) | Kafka broker 1 (KRaft) |
-| `broker2` | confluentinc/cp-kafka:7.7.0 | 9093, 9102 (JMX) | Kafka broker 2 (KRaft) |
-| `broker3` | confluentinc/cp-kafka:7.7.0 | 9094, 9103 (JMX) | Kafka broker 3 (KRaft) |
-| `schema-registry` | confluentinc/cp-schema-registry:7.7.0 | 8081 | Avro schema catalog |
+| `broker1` | confluentinc/cp-kafka:7.9.8 | 9092, 9101 (JMX) | Kafka broker 1 (KRaft) |
+| `broker2` | confluentinc/cp-kafka:7.9.8 | 9093, 9102 (JMX) | Kafka broker 2 (KRaft) |
+| `broker3` | confluentinc/cp-kafka:7.9.8 | 9094, 9103 (JMX) | Kafka broker 3 (KRaft) |
+| `schema-registry` | confluentinc/cp-schema-registry:7.9.8 | 8081 | Avro schema catalog |
 | `kafka-connect` | custom (confluentinc base + plugins) | 8083 | JDBC Sink + Debezium CDC |
 | `conduktor-console` | conduktor/conduktor-console:1.25.0 | 8080 | Kafka management UI |
 | `postgresql` (Conduktor) | postgres:16-alpine | — (internal) | Conduktor metadata DB |
@@ -101,7 +101,7 @@ graph TB
 | `feast-server` | python:3.12-slim | 6566 | Feast online feature server |
 | `vector-indexer` | python:3.12-slim | — | Qdrant index builder (one-shot) |
 | `autoheal` | willfarrell/autoheal | — | Auto-restart unhealthy containers |
-| `kafka-init` | confluentinc/cp-kafka:7.7.0 | — | Creates all Kafka topics (one-shot) |
+| `kafka-init` | confluentinc/cp-kafka:7.9.8 | — | Creates all Kafka topics (one-shot) |
 | `schema-registry-init` | python:3.12-alpine | — | Registers Avro schemas (one-shot) |
 | `connect-init` | python:3.12-alpine | — | Registers Kafka Connect connectors (one-shot) |
 | `cdc-init` | python:3.12-alpine | — | Registers Debezium CDC connector (one-shot) |
@@ -205,5 +205,5 @@ airflow-postgres (healthy)
 |-------|-----------|-------------------|
 | `app` | `container/Dockerfile` | uv, `data_platform/` source, `streaming` dep group |
 | `producer` | `container/Dockerfile` | Same as app (profiles: producer) |
-| `flink-*` | `container/flink/Dockerfile` | Python 3.11, PyFlink, Iceberg connector JAR (built by `make flink-jar`) |
+| `flink-*` | `container/flink/Dockerfile` | Python 3.12, PyFlink, Iceberg connector JAR (built by `make flink-jar`) |
 | `airflow-*` | `container/airflow/Dockerfile` | apache/airflow:2.9.3 + dbt-spark[PyHive] + libsasl2 |

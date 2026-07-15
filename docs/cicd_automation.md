@@ -32,7 +32,7 @@ Runs `ruff check` (lint rules E/F/W/I/UP/B/SIM) and `ruff format --check` with G
 
 ### Type Check
 
-Runs `pyright` in basic mode over `ai_system`, `services`, `alerts`, `data_platform`, and `observability`. Currently set to `continue-on-error: true` — informational until full type coverage is achieved.
+Runs `pyright` in basic mode over `ai_systems`, `services`, `alerts`, `data_platform`, and `observability`. Currently set to `continue-on-error: true` — informational until full type coverage is achieved.
 
 ### Test & Coverage
 
@@ -40,7 +40,7 @@ Runs the full pytest suite with coverage collection across all five packages. Re
 
 ```bash
 uv run pytest tests/ \
-  --cov=ai_system --cov=services --cov=alerts \
+  --cov=ai_systems --cov=services --cov=alerts \
   --cov=data_platform --cov=observability \
   --cov-report=xml --cov-report=term-missing \
   --cov-fail-under=40 -x --tb=short -q
@@ -120,7 +120,7 @@ aws ecs update-service --cluster aoip --service aoip-api \
 The Flink connector JAR must be built before the Flink Docker image:
 
 ```bash
-make flink-jar          # mvn package → container/flink/target/kda-dependencies-1.20.0.jar
+make flink-jar          # mvn package → container/flink/target/kda-dependencies-2.2.0.jar
 docker build -t <ecr-repo>/aoip-flink:<tag> \
   -f container/flink/Dockerfile .
 ```

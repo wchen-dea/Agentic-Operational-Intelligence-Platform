@@ -8,8 +8,8 @@ import pytest
 # ---------------------------------------------------------------------------
 # 1. Vector embeddings + ChromaDB hybrid search
 # ---------------------------------------------------------------------------
-from ai_system.retrieval.hybrid_search import LocalHybridSearch, _chroma_available
-from ai_system.config.settings import settings
+from ai_systems.retrieval.hybrid_search import LocalHybridSearch, _chroma_available
+from ai_systems.config.settings import settings
 
 
 def test_hybrid_search_returns_results():
@@ -72,7 +72,7 @@ def test_hybrid_search_backward_compat_matrix():
 # ---------------------------------------------------------------------------
 # 2. LLM tool/function calling
 # ---------------------------------------------------------------------------
-from ai_system.core.llm import generate_with_tools, LLMUsage
+from ai_systems.core.llm import generate_with_tools, LLMUsage
 
 
 def test_generate_with_tools_signature():
@@ -87,7 +87,7 @@ def test_generate_with_tools_signature():
     assert "max_tool_rounds" in params
 
 
-from ai_system.tools.calling import agentic_query
+from ai_systems.tools.calling import agentic_query
 
 
 def test_agentic_query_signature():
@@ -105,7 +105,7 @@ def test_agentic_query_signature():
 # 3 & 4. Streaming + Async endpoints exist
 # ---------------------------------------------------------------------------
 from fastapi.testclient import TestClient
-from ai_system.gateway.api.app import app
+from ai_systems.gateway.api.app import app
 
 client = TestClient(app)
 
@@ -157,7 +157,7 @@ def test_async_endpoint_without_api_key():
 # ---------------------------------------------------------------------------
 # 5. Guardrails
 # ---------------------------------------------------------------------------
-from ai_system.core.guardrails import (
+from ai_systems.core.guardrails import (
     validate_input,
     validate_output,
     GuardrailAction,
@@ -274,7 +274,7 @@ def test_guardrail_ask_endpoint_allows_clean():
 # ---------------------------------------------------------------------------
 # 6. Structured output
 # ---------------------------------------------------------------------------
-from ai_system.core.structured_output import (
+from ai_systems.core.structured_output import (
     KPIInsight,
     OperationalBriefResponse,
     AnomalyDiagnosisResponse,

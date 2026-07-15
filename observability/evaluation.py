@@ -460,7 +460,7 @@ class LLMEvaluator:
         Falls back to rule-based evaluation if LLM is unavailable.
         """
         import os
-        from ai_system.config.settings import settings
+        from ai_systems.config.settings import settings
 
         if not os.environ.get(settings.llm.api_key_env_var):
             return self.evaluate(output, context, criteria)
@@ -469,7 +469,7 @@ class LLMEvaluator:
         results: list[EvalResult] = []
 
         try:
-            from ai_system.core.llm import generate as llm_generate
+            from ai_systems.core.llm import generate as llm_generate
 
             question = context.get("question", "N/A")
             persona = context.get("persona", "store_manager")

@@ -1,7 +1,7 @@
-FROM confluentinc/cp-kafka-connect:7.7.0
+FROM confluentinc/cp-kafka-connect:7.9.8
 
 # Install the Confluent JDBC Sink/Source connector via confluent-hub
-RUN confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
+RUN confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.9.6
 
 # Install Debezium MySQL CDC connector
 RUN confluent-hub install --no-prompt debezium/debezium-connector-mysql:2.4.2

@@ -34,7 +34,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
 │ Stage 4 · AI Systems (real-time path)    │                                 │
 │ FastAPI + AI agents consume MySQL ODS    │                                 │
 │ KPI queries, anomaly detection, briefs   │                                 │
-│ services/api/   ai_system/   :8000        │                                 │
+│ services/api/   ai_systems/   :8000        │                                 │
 └──────────────────────────────────────────┘                                 │
                                                                               │
 ┌─────────────────────────────────────────────────────────────────────────────┤
@@ -98,7 +98,7 @@ make test           # run test suite
 ## Repo layout
 
 ```text
-ai_system/
+ai_systems/
   agents/            KPI, anomaly, promotion, recommendation agents
   orchestration/     DAG engine, intent router, executor with retry/fallback
   skills/            Skill ABC, built-in skill catalog, singleton registry

@@ -8,7 +8,7 @@ from unittest.mock import patch
 # ---------------------------------------------------------------------------
 # 7. Multi-turn conversation (SessionMemory in orchestrator)
 # ---------------------------------------------------------------------------
-from ai_system.retrieval.context import SessionMemory, StreamingStateStore, HybridContextAssembler
+from ai_systems.retrieval.context import SessionMemory, StreamingStateStore, HybridContextAssembler
 
 
 def test_session_memory_add_and_retrieve():
@@ -92,13 +92,13 @@ def test_context_assembler_with_session():
 
 def test_mcp_server_importable():
     """MCP server module should be importable."""
-    import ai_system.gateway.mcp.server  # noqa: F401
+    import ai_systems.gateway.mcp.server  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
 # 9. Auth / RBAC
 # ---------------------------------------------------------------------------
-from ai_system.gateway.api.auth import (
+from ai_systems.gateway.api.auth import (
     APIKeyRecord,
     register_api_key,
     _check_rbac,
@@ -135,7 +135,7 @@ def test_rbac_operator_allowed():
 # ---------------------------------------------------------------------------
 # 11. Model routing / fallback
 # ---------------------------------------------------------------------------
-from ai_system.core.model_router import (
+from ai_systems.core.model_router import (
     ModelRouter,
     TaskComplexity,
     ModelSpec,
@@ -346,7 +346,7 @@ def test_metrics_collector_histogram():
 def test_prometheus_metrics_endpoint():
     """The /metrics endpoint should return Prometheus exposition format."""
     from fastapi.testclient import TestClient
-    from ai_system.gateway.api.app import app
+    from ai_systems.gateway.api.app import app
 
     client = TestClient(app)
     # Seed a metric via the collector so it appears in the output

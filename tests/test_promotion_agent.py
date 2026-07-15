@@ -1,4 +1,4 @@
-from ai_system.agents.promotion_agent import PromotionAgent
+from ai_systems.agents.promotion_agent import PromotionAgent
 
 
 def test_promotion_agent_detects_issues():

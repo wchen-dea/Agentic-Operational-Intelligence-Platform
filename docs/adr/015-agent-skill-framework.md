@@ -10,7 +10,7 @@ Agent capabilities (fetch KPIs, detect anomalies, search knowledge, generate nar
 
 ## Decision
 
-Implement a `Skill` abstract base class (`ai_system/skills/`) with a `SkillRegistry` singleton that:
+Implement a `Skill` abstract base class (`ai_systems/skills/`) with a `SkillRegistry` singleton that:
 
 - Exposes each skill via `invoke(name, **kwargs)` — uniform invocation interface.
 - Exports all skills as LLM function-calling definitions via `to_tool_schemas()`.

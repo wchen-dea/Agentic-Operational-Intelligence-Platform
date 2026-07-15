@@ -19,7 +19,7 @@ The platform decomposes into eight independently deployable stages:
 | 1 | **Ingestion** | Publishes source-system events as Avro messages to canonical Kafka topics | Aurora MySQL / synthetic data | 15 canonical Avro Kafka topics (`Canonical*`) | `data_platform/producer/` `data_platform/schema/` |
 | 2 | **Flink Stream Processing** | 14 PyFlink Table API jobs transform canonical topics into PDM Sink topics | `Canonical*` Kafka topics | `Sink*` Kafka topics | `data_platform/flink_job/` Flink :8082 |
 | 3 | **Kafka Connect JDBC Sink** | JDBC Sink connectors write PDM Sink topics to MySQL ODS tables | `Sink*` Kafka topics | MySQL `retail_ops_sink` :3306 | `container/scripts/register_connectors.py` |
-| 4 | **AI Systems (real-time)** | FastAPI + agentic AI layer queries MySQL ODS for KPIs, anomalies, and briefs | MySQL ODS | Agent responses, alerts | `services/api/` `ai_system/` :8000 |
+| 4 | **AI Systems (real-time)** | FastAPI + agentic AI layer queries MySQL ODS for KPIs, anomalies, and briefs | MySQL ODS | Agent responses, alerts | `services/api/` `ai_systems/` :8000 |
 | 5 | **Debezium CDC** | Debezium captures MySQL ODS changes into CDC Kafka topics | MySQL ODS binlog | `retail_ops.aurora.*` topics | `container/scripts/register_cdc_connector.py` |
 | 6 | **Spark Streaming → Landing** | Spark reads CDC topics, appends Debezium envelope to Iceberg landing tables | CDC Kafka topics | `iceberg.landing.*` (append) | `data_platform/batch/spark/cdc_to_landing.py` |
 | 7 | **dbt Lakehouse** | dbt transforms landing through bronze/silver/gold/analytics. Airflow schedules every 30 min | `iceberg.landing.*` | `iceberg.bronze/silver/gold/analytics` | `data_platform/dbt/` Airflow :8085 |
@@ -93,7 +93,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph "ai_system/llm.py"
+    subgraph "ai_systems/llm.py"
         GEN[generate\nSync + Cache]
         TOOLS[generate_with_tools\nMulti-turn Tool Loop]
         STREAM[generate_stream\nSSE Async Generator]
@@ -120,19 +120,19 @@ flowchart LR
 
 | Component | Source |
 |-----------|--------|
-| LLM client | `ai_system/llm.py` |
-| Model router | `ai_system/model_router.py` |
-| Guardrails | `ai_system/guardrails.py` |
-| Structured output | `ai_system/structured_output.py` |
-| Tool-calling loop | `ai_system/tool_calling.py` |
-| DAG orchestration | `ai_system/orchestration/dag.py` |
-| Intent router | `ai_system/orchestration/router.py` |
-| DAG executor | `ai_system/orchestration/executor.py` |
-| Skill registry | `ai_system/skills/` |
-| Hybrid context | `ai_system/context.py` |
-| Session memory | `ai_system/memory/persistent_memory.py` |
-| A/B experiments | `ai_system/experimentation.py` |
-| Prompt registry | `ai_system/prompts.py` |
+| LLM client | `ai_systems/llm.py` |
+| Model router | `ai_systems/model_router.py` |
+| Guardrails | `ai_systems/guardrails.py` |
+| Structured output | `ai_systems/structured_output.py` |
+| Tool-calling loop | `ai_systems/tool_calling.py` |
+| DAG orchestration | `ai_systems/orchestration/dag.py` |
+| Intent router | `ai_systems/orchestration/router.py` |
+| DAG executor | `ai_systems/orchestration/executor.py` |
+| Skill registry | `ai_systems/skills/` |
+| Hybrid context | `ai_systems/context.py` |
+| Session memory | `ai_systems/memory/persistent_memory.py` |
+| A/B experiments | `ai_systems/experimentation.py` |
+| Prompt registry | `ai_systems/prompts.py` |
 | Observability | `observability/evaluation.py` |
 | Auth + RBAC | `services/api/auth.py` |
 | MCP server | `services/mcp_server.py` |

@@ -1,13 +1,13 @@
-FROM flink:1.20.0
+FROM flink:2.2.0-scala_2.12-java17
 
 # ---------------------------------------------------------------------------
 # Build arguments
 # ---------------------------------------------------------------------------
 ARG PYTHON_VERSION
-ENV PYTHON_VERSION=${PYTHON_VERSION:-3.11.10}
+ENV PYTHON_VERSION=${PYTHON_VERSION:-3.12.4}
 
 ARG FLINK_VERSION
-ENV FLINK_VERSION=${FLINK_VERSION:-1.20.0}
+ENV FLINK_VERSION=${FLINK_VERSION:-2.2.0}
 
 # ---------------------------------------------------------------------------
 # Connector / format dependencies JAR
@@ -26,18 +26,18 @@ ENV FLINK_VERSION=${FLINK_VERSION:-1.20.0}
 COPY container/flink/target/kda-dependencies-*.jar /opt/flink/lib/
 
 # ---------------------------------------------------------------------------
-# Java 11 — install and create an arch-agnostic JAVA_HOME symlink so the
+# Java 17 — install and create an arch-agnostic JAVA_HOME symlink so the
 # image works on both linux/amd64 and linux/arm64 without modification.
 # ---------------------------------------------------------------------------
 RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends openjdk-11-jdk && \
-    # Resolve the arch-specific path (e.g. java-11-openjdk-amd64 / arm64)
+    apt-get install -y --no-install-recommends openjdk-17-jdk && \
+    # Resolve the arch-specific path (e.g. java-17-openjdk-amd64 / arm64)
     # and create a stable symlink that JAVA_HOME can point to.
-    ln -sf "$(ls -d /usr/lib/jvm/java-11-openjdk-* | head -1)" /usr/lib/jvm/java-11-openjdk && \
+    ln -sf "$(ls -d /usr/lib/jvm/java-17-openjdk-* | head -1)" /usr/lib/jvm/java-17-openjdk && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 
 # ---------------------------------------------------------------------------
 # Python — built from source to pin an exact CPython version.
