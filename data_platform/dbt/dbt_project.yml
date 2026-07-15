@@ -4,9 +4,6 @@ config-version: 2
 profile: aoip_spark
 model-paths: ["models"]
 macro-paths: ["macros"]
-seed-paths: ["seeds"]
-test-paths: ["tests"]
-analysis-paths: ["analyses"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 # ---------------------------------------------------------------------------
@@ -24,9 +21,7 @@ models:
       +incremental_strategy: append
       +schema: bronze
       +on_schema_change: append_new_columns
-      +partition_by:
-        field: _ingested_date
-        data_type: date
+      +partition_by: ['_ingested_date']
     silver:
       +materialized: incremental
       +incremental_strategy: merge
@@ -40,6 +35,3 @@ models:
       +schema: analytics
       +file_format: iceberg
       +location_root: "s3a://warehouse"
-seeds:
-  aoip_lakehouse:
-    +schema: seeds

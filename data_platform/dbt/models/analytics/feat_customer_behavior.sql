@@ -114,3 +114,4 @@ select
 from orders     o
 full outer join appointments a on o.customer_id = a.customer_id
 full outer join invoices      i on coalesce(o.customer_id, a.customer_id) = i.customer_id
+where coalesce(o.customer_id, a.customer_id, i.customer_id) is not null

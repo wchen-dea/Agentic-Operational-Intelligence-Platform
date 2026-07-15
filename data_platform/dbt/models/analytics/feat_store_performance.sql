@@ -2,8 +2,7 @@
     config(
         materialized  = 'table',
         file_format   = 'iceberg',
-        schema        = 'analytics',
-        post_hook     = "ANALYZE TABLE {{ this }} COMPUTE STATISTICS"
+        schema        = 'analytics'
     )
 }}
 
@@ -23,7 +22,10 @@
 */
 
 with kpis as (
-    select * from {{ ref('gold_store_kpis') }}
+    select *
+    from {{ ref('gold_store_kpis') }}
+    where store_id is not null
+      and kpi_date is not null
 ),
 
 rolling as (
