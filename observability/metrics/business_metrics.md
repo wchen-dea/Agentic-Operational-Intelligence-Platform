@@ -1,6 +1,39 @@
 # Business Metrics
 
-All metrics below are emittable via the `MetricsCollector` singleton and exported in Prometheus exposition format at `GET /metrics`.
+This document distinguishes between:
+
+- Implemented now: metrics currently emitted by code and available at `GET /metrics`.
+- Planned: target metrics not yet emitted in code.
+
+## Implemented now
+
+These are emitted via `observability.evaluation.MetricsCollector` and tracked by `AgentPerformanceTracker` / `LLMEvaluator`.
+
+### Agent performance
+
+- `agent_duration_ms`
+- `agent_executions_total`
+- `agent_successes_total`
+- `agent_failures_total`
+- `agent_fallbacks_total`
+- `agent_retries_total`
+
+### LLM usage
+
+- `llm_calls_total`
+- `llm_call_duration_ms`
+- `llm_input_tokens_total`
+- `llm_output_tokens_total`
+
+### Evaluation quality
+
+- `eval_score`
+- `eval_passed_total`
+- `eval_failed_total`
+
+## Planned metrics backlog
+
+The following metrics are goals and require implementation in emitters/trackers before they appear in `/metrics`.
 
 ## Data freshness
 

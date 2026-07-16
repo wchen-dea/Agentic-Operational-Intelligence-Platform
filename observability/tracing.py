@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,9 @@ _tracer_provider: Any = None
 
 try:
     from opentelemetry import trace as _otel_trace
+    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
     _otel_available = True
 except ImportError:
@@ -179,7 +180,7 @@ def current_trace_id() -> str:
 class _NoOpSpan:
     def set_attribute(self, key: str, value: Any) -> None: ...
     def set_status(self, *a: Any, **kw: Any) -> None: ...
-    def __enter__(self) -> "_NoOpSpan":
+    def __enter__(self) -> _NoOpSpan:
         return self
 
     def __exit__(self, *a: Any) -> None: ...

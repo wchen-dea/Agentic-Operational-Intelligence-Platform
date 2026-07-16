@@ -1,19 +1,20 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from ai_systems.gateway.api.routes.query import router as query_router
-from ai_systems.gateway.api.routes.kpi import router as kpi_router
+from ai_systems.config.settings import settings
+from ai_systems.gateway.api.auth import APIKeyRecord, init_auth_from_env, require_auth
 from ai_systems.gateway.api.routes.alerts import router as alerts_router
+from ai_systems.gateway.api.routes.kpi import router as kpi_router
 from ai_systems.gateway.api.routes.operations import router as operations_router
+from ai_systems.gateway.api.routes.query import router as query_router
 from ai_systems.gateway.api.routes.skills import router as skills_router
 from ai_systems.gateway.api.routes.streaming import router as streaming_router
-from ai_systems.gateway.api.auth import init_auth_from_env, require_auth, APIKeyRecord
-from observability.logging_config import configure_logging, CorrelationIdMiddleware
-from ai_systems.config.settings import settings
+from observability.logging_config import CorrelationIdMiddleware, configure_logging
 
 # Configure structured logging before anything else
 configure_logging(
@@ -22,7 +23,28 @@ configure_logging(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title=settings.app_name)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle hooks for auth and observability startup."""
+    init_auth_from_env()
+    logger.info("Auth initialised")
+
+    if settings.otel.enabled:
+        from observability.tracing import configure_tracing, instrument_fastapi
+
+        configure_tracing(
+            endpoint=settings.otel.endpoint,
+            service_name=settings.otel.service_name,
+            sample_rate=settings.otel.traces_sample_rate,
+        )
+        instrument_fastapi(app)
+        logger.info("OpenTelemetry tracing enabled")
+
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 # Correlation ID injection (must be first middleware so all log records carry the ID)
 app.add_middleware(CorrelationIdMiddleware)
@@ -45,24 +67,6 @@ app.include_router(skills_router)
 app.include_router(streaming_router)
 
 
-@app.on_event("startup")
-async def startup() -> None:
-    """Load API keys from environment variables on process start."""
-    init_auth_from_env()
-    logger.info("Auth initialised")
-    # Configure and apply OpenTelemetry tracing
-    if settings.otel.enabled:
-        from observability.tracing import configure_tracing, instrument_fastapi
-
-        configure_tracing(
-            endpoint=settings.otel.endpoint,
-            service_name=settings.otel.service_name,
-            sample_rate=settings.otel.traces_sample_rate,
-        )
-        instrument_fastapi(app)
-        logger.info("OpenTelemetry tracing enabled")
-
-
 @app.get("/health")
 def health():
     """Public health-check - no auth required."""
@@ -70,7 +74,7 @@ def health():
 
 
 @app.get("/usage", tags=["observability"])
-def usage(auth: APIKeyRecord = Depends(require_auth)):
+def usage(auth: APIKeyRecord = Depends(require_auth)):  # noqa: B008
     """Return LLM token usage and estimated cost for the current process."""
     from ai_systems.core.llm import get_session_cost_summary
 
@@ -78,7 +82,7 @@ def usage(auth: APIKeyRecord = Depends(require_auth)):
 
 
 @app.get("/metrics", tags=["observability"])
-def prometheus_metrics(auth: APIKeyRecord = Depends(require_auth)):
+def prometheus_metrics(auth: APIKeyRecord = Depends(require_auth)):  # noqa: B008
     """Export metrics in Prometheus exposition format.
 
     Returns prometheus_client output when the package is installed;

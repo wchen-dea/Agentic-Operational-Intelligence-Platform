@@ -11,13 +11,16 @@ Provides:
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections import defaultdict
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
-from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
 # prometheus_client integration (optional - falls back gracefully if absent)
@@ -128,10 +131,8 @@ class MetricsCollector:
         # Prometheus side-channel
         pml = _prom_labels(name, labels)
         if pml is not None:
-            try:
+            with suppress(Exception):
                 pml.inc(value)
-            except Exception:
-                pass
 
     def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         key = self._key(name, labels)
@@ -140,10 +141,8 @@ class MetricsCollector:
         # Prometheus side-channel (Gauge type)
         pml = _prom_labels(name, labels)
         if pml is not None:
-            try:
+            with suppress(Exception):
                 pml.set(value)
-            except Exception:
-                pass
 
     def observe(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         key = self._key(name, labels)
@@ -152,10 +151,8 @@ class MetricsCollector:
         # Prometheus side-channel (Histogram type)
         pml = _prom_labels(name, labels)
         if pml is not None:
-            try:
+            with suppress(Exception):
                 pml.observe(value)
-            except Exception:
-                pass
 
     # ------------------------------------------------------------------
     # Read methods
@@ -200,19 +197,22 @@ class MetricsCollector:
         for key, value in snap.get("counters", {}).items():
             name, label_str = _split_metric_key(key)
             pname = _sanitize_prom_name(name)
+            prom_labels = _to_prom_label_str(label_str)
             lines.append(f"# TYPE {pname} counter")
-            lines.append(f"{pname}{label_str} {value}")
+            lines.append(f"{pname}{prom_labels} {value}")
         for key, value in snap.get("gauges", {}).items():
             name, label_str = _split_metric_key(key)
             pname = _sanitize_prom_name(name)
+            prom_labels = _to_prom_label_str(label_str)
             lines.append(f"# TYPE {pname} gauge")
-            lines.append(f"{pname}{label_str} {value}")
+            lines.append(f"{pname}{prom_labels} {value}")
         for key, stats in snap.get("histograms", {}).items():
             name, label_str = _split_metric_key(key)
             pname = _sanitize_prom_name(name)
+            prom_labels = _to_prom_label_str(label_str)
             lines.append(f"# TYPE {pname} summary")
-            lines.append(f"{pname}_count{label_str} {stats.get('count', 0)}")
-            lines.append(f"{pname}_sum{label_str} {stats.get('sum', 0.0)}")
+            lines.append(f"{pname}_count{prom_labels} {stats.get('count', 0)}")
+            lines.append(f"{pname}_sum{prom_labels} {stats.get('sum', 0.0)}")
         lines.append("")
         return "\n".join(lines)
 
@@ -229,6 +229,32 @@ def _split_metric_key(key: str) -> tuple[str, str]:
         idx = key.index("{")
         return key[:idx], key[idx:]
     return key, ""
+
+
+def _to_prom_label_str(label_str: str) -> str:
+    """Convert internal label format `{k=v}` to Prometheus format `{k="v"}`."""
+    if not label_str:
+        return ""
+    inner = label_str.strip()
+    if not (inner.startswith("{") and inner.endswith("}")):
+        return ""
+    inner = inner[1:-1].strip()
+    if not inner:
+        return ""
+
+    parts: list[str] = []
+    for item in inner.split(","):
+        if "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip().replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        if key:
+            parts.append(f'{key}="{value}"')
+
+    if not parts:
+        return ""
+    return "{" + ",".join(parts) + "}"
 
 
 def _sanitize_prom_name(name: str) -> str:
@@ -262,7 +288,7 @@ class EvalResult:
     details: str = ""
 
 
-class EvalCriteria(str, Enum):
+class EvalCriteria(StrEnum):
     GROUNDEDNESS = "groundedness"
     ACTIONABILITY = "actionability"
     RELEVANCE = "relevance"
@@ -459,7 +485,6 @@ class LLMEvaluator:
 
         Falls back to rule-based evaluation if LLM is unavailable.
         """
-        import os
         from ai_systems.config.settings import settings
 
         if not os.environ.get(settings.llm.api_key_env_var):
