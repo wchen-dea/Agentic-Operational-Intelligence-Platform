@@ -1055,7 +1055,7 @@ services:
       - bash
       - -c
       - |
-        pip install --quiet feast[redis]==0.40.0 && \
+        pip install --quiet feast[spark,redis,aws]==0.40.0 && \
         feast -c /feature_store serve --host 0.0.0.0 --port 6566
     ports:
       - "6566:6566"   # Feast online feature server

@@ -214,6 +214,35 @@ make airflow-down       # stop Airflow
 The `dbt_lakehouse_pipeline` DAG runs every 30 minutes:
 `start → dbt deps → bronze (run + test) → silver (run + test) → gold (run + test) → analytics (run + test) → end`
 
+### Post-restart checks (recommended)
+
+Run this sequence after `make restart-full` to quickly validate end-to-end health:
+
+```bash
+# Core runtime
+make ps
+
+# CDC connector health and topic routing
+curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/status
+curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/topics
+
+# CDC -> MinIO stream + landing writes
+make lake-stream
+docker compose -f container/docker-compose.yaml logs --tail 120 spark-cdc-streaming
+docker exec container-minio-1 sh -lc 'ls -la /data/landing && ls -la /data/checkpoints'
+
+# Airflow health and scheduler heartbeat
+curl --noproxy '*' -sf http://localhost:8085/health
+docker compose -f container/docker-compose.yaml exec -T airflow-scheduler \
+  airflow jobs check --job-type SchedulerJob \
+  --hostname $(docker compose -f container/docker-compose.yaml exec -T airflow-scheduler hostname)
+```
+
+Spark endpoint note:
+
+- `http://localhost:4040` is Spark Master Web UI.
+- `localhost:7077` is Spark RPC (non-HTTP), so browser/curl returns empty reply.
+
 ## Analytics layer (Feature Store + Semantic Layer + Vector Index)
 
 ```bash
@@ -386,6 +415,9 @@ make conduktor-restart  # restart the container (clears frozen HTTP thread pool)
 | Anthropic calls fail with missing key | Set `ANTHROPIC_API_KEY` and `AOIP_LLM__PROVIDER=anthropic` |
 | LLM output looks degraded in Ollama mode | Use a stronger Ollama model or switch provider to Anthropic |
 | Port 8000 in use | Kill existing process or run `make dev` with `--port 8001` |
+| CDC connector is `RUNNING` but MinIO landing is empty | Start Spark CDC stream with `make lake-stream`; confirm `spark-cdc-streaming` logs show `Streaming query started` and verify objects under `/data/landing/landing`. |
+| Airflow `bronze.run` fails with `Database Error: failed to connect` | Ensure Spark Thrift namespaces exist (`default`, `bronze`, `silver`, `gold`, `analytics`). Then retry dbt and clear stuck task instances (`airflow tasks clear ... --task-regex '^bronze.run$' --yes`). |
+| `qdrant` or `producer` appear `unhealthy` in `make ps` while service works | Validate via direct endpoint/log checks (`curl --noproxy '*' http://localhost:6333/healthz`, producer logs). Local healthchecks can be image-mismatched. |
 
 ## Deployment Notes
 
