@@ -8,6 +8,8 @@ __pycache__/
 target/
 build/
 dist/
+*.out
+*.pid
 
 # Environment
 .env
@@ -42,6 +44,20 @@ container/tmp/
 htmlcov/
 .pytest_cache/
 coverage.xml
+
+# Runtime state
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+**/.data/
+
+# Local runtime outputs
+tmp/
+temp/
+runtime/
 
 # dbt artifacts
 data_platform/dbt/target/
