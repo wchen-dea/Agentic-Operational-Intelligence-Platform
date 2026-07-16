@@ -106,8 +106,8 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Agentic Operational Intelligence Platform"
-    rag_corpus_path: str = str(_PROJECT_ROOT / "ai_system/retrieval/corpus/sample_corpus.jsonl")
-    alert_rules_path: str = str(_PROJECT_ROOT / "ai_system/alerts/rules/kpi_thresholds.yaml")
+    rag_corpus_path: str = str(_PROJECT_ROOT / "ai_systems/retrieval/corpus/sample_corpus.jsonl")
+    alert_rules_path: str = str(_PROJECT_ROOT / "ai_systems/alerting/rules/kpi_thresholds.yaml")
     default_region: str = "Phoenix"
     # Set AOIP_CHROMA_PERSIST_PATH to persist the ChromaDB vector index to disk.
     # Leave as None to use an ephemeral in-process store (dev/test only).

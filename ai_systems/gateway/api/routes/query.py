@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ai_systems.gateway.api.models import AskRequest
-from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
-from ai_systems.orchestration.orchestrator import Orchestrator, get_orchestrator
+
 from ai_systems.core.guardrails import validate_input
+from ai_systems.gateway.api.auth import APIKeyRecord, require_auth
+from ai_systems.gateway.api.models import AskRequest
+from ai_systems.orchestration.orchestrator import Orchestrator, get_orchestrator
 
 router = APIRouter(tags=["query"])
 
@@ -10,8 +11,8 @@ router = APIRouter(tags=["query"])
 @router.post("/ask")
 def ask(
     req: AskRequest,
-    orchestrator: Orchestrator = Depends(get_orchestrator),
-    auth: APIKeyRecord = Depends(require_auth),
+    orchestrator: Orchestrator = Depends(get_orchestrator),  # noqa: B008
+    auth: APIKeyRecord = Depends(require_auth),  # noqa: B008
 ):
     # Input guardrail
     guard = validate_input(req.question)

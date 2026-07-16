@@ -21,9 +21,9 @@ import os
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
-from ai_systems.gateway.api.models import AskRequest
-from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
 from ai_systems.config.settings import settings
+from ai_systems.gateway.api.auth import APIKeyRecord, require_auth
+from ai_systems.gateway.api.models import AskRequest
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ router = APIRouter(tags=["streaming"])
 
 
 @router.post("/ask/stream")
-async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
+async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):  # noqa: B008
     """Stream an orchestrator DAG response token-by-token via Server-Sent Events.
 
     The full DAG (KPI -> anomaly -> promotion -> recommendation) runs in a thread
@@ -85,7 +85,7 @@ async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)
 
 
 @router.post("/ask/async")
-async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
+async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):  # noqa: B008
     """Run the full orchestrator DAG asynchronously (non-blocking).
 
     Uses ``asyncio.to_thread`` so the synchronous DAG executor does not block
@@ -107,7 +107,7 @@ async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth))
 
 
 @router.post("/ask/agentic")
-async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
+async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):  # noqa: B008
     """Agentic endpoint where the LLM can autonomously invoke registered skills."""
     if not os.environ.get(settings.llm.api_key_env_var):
         return {"answer": "LLM API key not configured", "tool_calls": []}
@@ -128,87 +128,6 @@ async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth
 
     result = await asyncio.to_thread(
         agentic_query,
-        question=prompt,
-        system=system,
-        max_tokens=1024,
-        max_tool_rounds=5,
-    )
-    return result
-
-
-@router.post("/ask/stream")
-async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
-    """Stream the LLM response token-by-token via Server-Sent Events."""
-    from ai_systems.core.llm import generate_stream
-    from ai_systems.core.prompts import OPERATIONAL_BRIEF
-
-    if not os.environ.get(settings.llm.api_key_env_var):
-
-        async def fallback():
-            yield {"data": json.dumps({"error": "LLM API key not configured"})}
-
-        return EventSourceResponse(fallback())
-
-    system = OPERATIONAL_BRIEF.system
-    prompt = f"[{req.persona}] {req.question}"
-    if req.store_id:
-        prompt += f" (store: {req.store_id})"
-    if req.region:
-        prompt += f" (region: {req.region})"
-
-    async def event_generator():
-        try:
-            async for chunk in generate_stream(prompt, system=system, max_tokens=512):
-                yield {"data": json.dumps({"token": chunk})}
-            yield {"data": json.dumps({"done": True})}
-        except Exception as exc:
-            logger.error("Stream error: %s", exc)
-            yield {"data": json.dumps({"error": str(exc)})}
-
-    return EventSourceResponse(event_generator())
-
-
-@router.post("/ask/async")
-async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
-    """Async (non-streaming) version of the /ask endpoint using the async LLM client."""
-    from ai_systems.core.llm import generate_async
-    from ai_systems.core.prompts import OPERATIONAL_BRIEF
-
-    if not os.environ.get(settings.llm.api_key_env_var):
-        return {"answer": "LLM API key not configured", "async": True}
-
-    system = OPERATIONAL_BRIEF.system
-    prompt = f"[{req.persona}] {req.question}"
-    if req.store_id:
-        prompt += f" (store: {req.store_id})"
-    if req.region:
-        prompt += f" (region: {req.region})"
-
-    text = await generate_async(prompt, system=system, max_tokens=512)
-    return {"answer": text, "persona": req.persona, "async": True}
-
-
-@router.post("/ask/agentic")
-async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
-    """Agentic endpoint where the LLM can autonomously invoke registered skills."""
-    if not os.environ.get(settings.llm.api_key_env_var):
-        return {"answer": "LLM API key not configured", "tool_calls": []}
-
-    from ai_systems.tools.calling import agentic_query
-
-    system = (
-        "You are an operational intelligence assistant for a retail chain. "
-        "Use the available tools to fetch KPIs, detect anomalies, and search "
-        "the knowledge base before generating your answer. "
-        f"Respond for the persona: {req.persona}."
-    )
-    prompt = req.question
-    if req.store_id:
-        prompt += f"\n\nContext: store_id={req.store_id}"
-    if req.region:
-        prompt += f"\n\nContext: region={req.region}"
-
-    result = agentic_query(
         question=prompt,
         system=system,
         max_tokens=1024,
