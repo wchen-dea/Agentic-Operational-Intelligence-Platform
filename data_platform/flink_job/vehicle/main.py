@@ -4,13 +4,13 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.vehicle.logging_util import log_message
-from data_platform.flink_jobs.vehicle.schema_builders import (
+from flink_job.vehicle.logging_util import log_message
+from flink_job.vehicle.schema_builders import (
     consumer_vehicle_canonical_schema_builder,
     producer_vehicle_schema_builder,
 )
-from data_platform.flink_jobs.vehicle.table_functions import extract_vehicle_trims
-from data_platform.flink_jobs.vehicle.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.vehicle.table_functions import extract_vehicle_trims
+from flink_job.vehicle.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

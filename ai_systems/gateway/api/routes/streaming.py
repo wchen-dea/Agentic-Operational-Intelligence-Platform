@@ -21,9 +21,9 @@ import os
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
-from ai_system.gateway.api.models import AskRequest
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.config.settings import settings
+from ai_systems.gateway.api.models import AskRequest
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)
     The recommendation narrative is then emitted word-by-word as SSE tokens,
     followed by a final ``done`` event carrying the structured metadata.
     """
-    from ai_system.orchestration.orchestrator import get_orchestrator
+    from ai_systems.orchestration.orchestrator import get_orchestrator
 
     orchestrator = get_orchestrator()
 
@@ -91,7 +91,7 @@ async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth))
     Uses ``asyncio.to_thread`` so the synchronous DAG executor does not block
     the async event loop.  Returns the same structured response as ``POST /ask``.
     """
-    from ai_system.orchestration.orchestrator import get_orchestrator
+    from ai_systems.orchestration.orchestrator import get_orchestrator
 
     orchestrator = get_orchestrator()
     result = await asyncio.to_thread(
@@ -112,7 +112,7 @@ async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth
     if not os.environ.get(settings.llm.api_key_env_var):
         return {"answer": "LLM API key not configured", "tool_calls": []}
 
-    from ai_system.tools.calling import agentic_query
+    from ai_systems.tools.calling import agentic_query
 
     system = (
         "You are an operational intelligence assistant for a retail chain. "
@@ -139,8 +139,8 @@ async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth
 @router.post("/ask/stream")
 async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
     """Stream the LLM response token-by-token via Server-Sent Events."""
-    from ai_system.core.core.llm import generate_stream
-    from ai_system.core.core.prompts import OPERATIONAL_BRIEF
+    from ai_systems.core.llm import generate_stream
+    from ai_systems.core.prompts import OPERATIONAL_BRIEF
 
     if not os.environ.get(settings.llm.api_key_env_var):
 
@@ -171,8 +171,8 @@ async def ask_stream(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)
 @router.post("/ask/async")
 async def ask_async(req: AskRequest, auth: APIKeyRecord = Depends(require_auth)):
     """Async (non-streaming) version of the /ask endpoint using the async LLM client."""
-    from ai_system.core.core.llm import generate_async
-    from ai_system.core.core.prompts import OPERATIONAL_BRIEF
+    from ai_systems.core.llm import generate_async
+    from ai_systems.core.prompts import OPERATIONAL_BRIEF
 
     if not os.environ.get(settings.llm.api_key_env_var):
         return {"answer": "LLM API key not configured", "async": True}
@@ -194,7 +194,7 @@ async def ask_agentic(req: AskRequest, auth: APIKeyRecord = Depends(require_auth
     if not os.environ.get(settings.llm.api_key_env_var):
         return {"answer": "LLM API key not configured", "tool_calls": []}
 
-    from ai_system.tools.calling import agentic_query
+    from ai_systems.tools.calling import agentic_query
 
     system = (
         "You are an operational intelligence assistant for a retail chain. "

@@ -9,7 +9,7 @@ aurora_mysql:
     appointments: appointments
     pos_invoices: pos_invoices
     work_orders: work_orders
-    inventory_snapshots: inventory_snapshots
+    article_inventory: article_inventory
 cdc:
   mode: aurora_mysql_cdc
   connector: aws_dms

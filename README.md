@@ -25,7 +25,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Stage 3 · Kafka Connect JDBC Sink → MySQL ODS                               │
-│ JDBC Sink connectors write PDM Sink* topics → MySQL retail_ops_sink tables  │
+│ JDBC Sink connectors write PDM Sink* topics → MySQL retail_ops tables        │
 │ container/scripts/register_connectors.py   MySQL :3306                      │
 └──────────────┬────────────────────────────────────────────────────────────┬─┘
                │ MySQL ODS                                                  │
@@ -34,7 +34,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
 │ Stage 4 · AI Systems (real-time path)    │                                 │
 │ FastAPI + AI agents consume MySQL ODS    │                                 │
 │ KPI queries, anomaly detection, briefs   │                                 │
-│ services/api/   ai_systems/   :8000        │                                 │
+│ ai_systems/gateway/api/   ai_systems/   :8000                               │
 └──────────────────────────────────────────┘                                 │
                                                                               │
 ┌─────────────────────────────────────────────────────────────────────────────┤
@@ -48,7 +48,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Stage 6 · Spark Structured Streaming → MinIO Landing (Iceberg)             │
 │ CDC topics → iceberg.landing.* (append-only, full Debezium envelope)       │
-│ data_platform/batch/spark/cdc_to_landing.py   MinIO :9000                  │
+│ data_platform/spark/cdc_to_landing.py   MinIO :9000                        │
 └───────────────────────────────────┬─────────────────────────────────────────┘
                                     │ iceberg.landing.*
                                     ▼
@@ -113,18 +113,18 @@ ai_systems/
   structured_output.py  Pydantic-validated LLM response models
   tool_calling.py    Agentic tool-calling loop
 config/              Runtime settings (Aurora MySQL, CDC, LLM, Redis)
-services/
-  api/               FastAPI (7 route modules: query, kpi, alerts, operations, skills, streaming, health)
-  mcp_server.py      MCP server (5 tools, 2 resources, 2 prompts)
+ai_systems/gateway/
+  api/               FastAPI (routes: query, kpi, alerts, operations, skills, streaming, health)
+  mcp/server.py      MCP server entrypoint
   scheduler/         Daily summary job
 data_platform/
   kpi_catalog.yaml   Machine-readable KPI definitions (16 KPIs)
   kpi_store.py       SQLite-backed KPI data store
   semantic_layer.py  Typed KPI records with anomaly detection
   schema/            Avro schemas for 5 canonical topic domains
-  ddl/               MySQL DDL init scripts (retail_ops_sink)
+  ddl/               MySQL DDL init scripts (retail_ops)
   producer/          Synthetic Avro message producer (15 topics)
-  batch/spark/       PySpark Structured Streaming — CDC → MinIO landing (Iceberg)
+  spark/             PySpark Structured Streaming — CDC → MinIO landing (Iceberg)
   dbt/               dbt Core project — staging → bronze → silver → gold → analytics
     models/
       staging/       Views over iceberg.landing (source declarations)
@@ -210,7 +210,7 @@ make test && make lint && make typecheck
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Platform API | http://localhost:8000 | `X-API-Key` header |
-| Conduktor | http://localhost:8080 | admin@conduktor.io / admin |
+| Conduktor | http://localhost:8086 | admin@conduktor.io / admin |
 | Schema Registry | http://localhost:8081 | — |
 | Flink Dashboard | http://localhost:8082 | — |
 | Kafka Connect | http://localhost:8083 | — |
@@ -249,7 +249,3 @@ Built around an open-source, locally-runnable data lakehouse — swap components
 | Qdrant (vector search) | OpenSearch / Pinecone |
 | Feast (feature store) | AWS SageMaker Feature Store |
 | ChromaDB (RAG) | AWS OpenSearch / pgvector |
-
-
-- Anthropic Claude client abstraction with response caching (128-entry LRU), token tracking, and session cost summary
-- `generate()` — standard text generation with cache

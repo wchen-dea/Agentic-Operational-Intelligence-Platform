@@ -10,7 +10,7 @@ The platform API exposes sensitive operational data (KPIs, alerts, agent recomme
 
 ## Decision
 
-Implement **API key authentication** with **three RBAC roles** applied globally via FastAPI middleware (`services/api/auth.py`):
+Implement **API key authentication** with **three RBAC roles** applied globally via FastAPI middleware (`ai_systems/gateway/api/auth.py`):
 
 | Role | Access |
 |------|--------|

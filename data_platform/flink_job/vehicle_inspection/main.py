@@ -4,15 +4,15 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.vehicle_inspection.logging_util import log_message
-from data_platform.flink_jobs.vehicle_inspection.schema_builders import (
+from flink_job.vehicle_inspection.logging_util import log_message
+from flink_job.vehicle_inspection.schema_builders import (
     consumer_vtv_canonical_schema_builder,
     producer_inspection_schema_builder,
     producer_detail_schema_builder,
     producer_measurement_schema_builder,
 )
-from data_platform.flink_jobs.vehicle_inspection.table_functions import extract_details, extract_measurements
-from data_platform.flink_jobs.vehicle_inspection.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.vehicle_inspection.table_functions import extract_details, extract_measurements
+from flink_job.vehicle_inspection.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

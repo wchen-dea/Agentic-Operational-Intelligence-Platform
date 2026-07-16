@@ -15,5 +15,7 @@ USER airflow
 
 # dbt-spark (PyHive transport = Spark Thrift Server JDBC)
 # astro-cosmos = optional dbt-native task graph in Airflow UI
-COPY requirements.txt /tmp/airflow-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/airflow-requirements.txt
+COPY container/airflow/requirements.txt /tmp/airflow-requirements.txt
+RUN pip install --no-cache-dir \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.12.txt" \
+    -r /tmp/airflow-requirements.txt

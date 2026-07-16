@@ -4,20 +4,20 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.customer.logging_util import log_message
-from data_platform.flink_jobs.customer.schema_builders import (
+from flink_job.customer.logging_util import log_message
+from flink_job.customer.schema_builders import (
     consumer_customer_canonical_schema_builder,
     producer_customer_schema_builder,
     producer_customer_contact_schema_builder,
     producer_customer_alt_id_schema_builder,
     producer_customer_vehicle_schema_builder,
 )
-from data_platform.flink_jobs.customer.table_functions import (
+from flink_job.customer.table_functions import (
     extract_contacts,
     extract_alternate_identifiers,
     extract_customer_vehicles,
 )
-from data_platform.flink_jobs.customer.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.customer.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

@@ -4,20 +4,20 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.work_order.logging_util import log_message
-from data_platform.flink_jobs.work_order.schema_builders import (
+from flink_job.work_order.logging_util import log_message
+from flink_job.work_order.schema_builders import (
     consumer_wom_canonical_schema_builder,
     producer_work_order_schema_builder,
     producer_wo_line_item_schema_builder,
     producer_wo_bay_assignment_schema_builder,
     producer_wo_employee_schema_builder,
 )
-from data_platform.flink_jobs.work_order.table_functions import (
+from flink_job.work_order.table_functions import (
     extract_line_items,
     extract_bay_assignments,
     extract_employees,
 )
-from data_platform.flink_jobs.work_order.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.work_order.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

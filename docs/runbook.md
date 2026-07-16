@@ -33,7 +33,7 @@ The platform has eight ordered stages. Each can be started and debugged independ
 make produce                                # all 15 topics at 0.5 s interval
 PRODUCE_INTERVAL=2 make produce             # slower rate
 make topics                                 # verify topics exist
-# Conduktor: http://localhost:8080  Schema Registry: http://localhost:8081
+# Conduktor: http://localhost:8086  Schema Registry: http://localhost:8081
 ```
 
 Topics produced: `CanonicalSalesforceCrmAppointment`, `CanonicalSapSalesorderDetail`, `CanonicalTrendwellVehivleInspection`, `CanonicalKronosCrewtime`, `CanonicalWarehouseInventorySnapshot`, and 10 more.
@@ -54,7 +54,7 @@ Sink topics: `SinkAppointment`, `SinkSalesOrder`, `SinkWorkOrder`, `SinkArticleI
 
 ```bash
 make register-schemas                       # register Avro schemas
-make register-connectors                    # JDBC Sink connectors → MySQL retail_ops_sink
+make register-connectors                    # JDBC Sink connectors → MySQL retail_ops tables
 # Kafka Connect: http://localhost:8083  MySQL: localhost:3306
 ```
 
@@ -74,7 +74,7 @@ curl -X POST http://localhost:8000/ask \
 ```bash
 make register-cdc                           # register Debezium source connector
 # CDC topics: retail_ops.aurora.retail_ops.{sales_orders,appointments,
-#             pos_invoices,work_orders,inventory_snapshots}
+#             pos_invoices,work_orders,article_inventory}
 ```
 
 ### Stage 6 — Spark Streaming → MinIO Landing (Iceberg)
@@ -110,7 +110,7 @@ make analytics-index                        # build Qdrant vector indexes
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Platform API | http://localhost:8000 | — |
-| Conduktor | http://localhost:8080 | admin@conduktor.io / admin |
+| Conduktor | http://localhost:8086 | admin@conduktor.io / admin |
 | Schema Registry | http://localhost:8081 | — |
 | Flink Dashboard | http://localhost:8082 | — |
 | Kafka Connect | http://localhost:8083 | — |

@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `reflexis_weekly_staff_metrics` (
   `system_store_identifier`          int         NOT NULL,
   `system_department_identifier`     int         NOT NULL,
   `staff_group`                      varchar(16) NOT NULL,
-  `week_indicator`                   int         NOT NULL,
+  `week_indicator`                   int         DEFAULT NULL,
   `system_date_identifier`           int         NOT NULL,
   `create_timestamp`                 datetime    NOT NULL,
   `last_modify_timestamp`            datetime    NOT NULL,
@@ -46,5 +46,5 @@ CREATE TABLE IF NOT EXISTS `reflexis_weekly_staff_metrics` (
   `db_create_timestamp`              datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `db_update_timestamp`              datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`site_number`, `system_store_identifier`, `system_department_identifier`,
-               `staff_group`, `week_indicator`, `system_date_identifier`)
+               `staff_group`, `system_date_identifier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

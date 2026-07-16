@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from ai_system.gateway.api.models import KPIRequest
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.tools.fetch_kpi_tool import fetch_store_kpis
+from ai_systems.gateway.api.models import KPIRequest
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.tools.fetch_kpi_tool import fetch_store_kpis
 
 router = APIRouter(tags=["kpi"])
 

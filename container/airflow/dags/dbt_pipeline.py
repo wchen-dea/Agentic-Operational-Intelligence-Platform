@@ -89,7 +89,7 @@ def dbt_lakehouse_pipeline():
             task_id="run",
             bash_command=dbt_cmd(
                 "run",
-                select="bronze",
+                select="+bronze",
                 extra="{{ '--full-refresh' if params.full_refresh else '' }}",
             ),
         )

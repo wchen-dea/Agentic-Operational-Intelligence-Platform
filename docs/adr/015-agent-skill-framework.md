@@ -48,4 +48,4 @@ Five built-in skills:
 - Tool schema generation relies on Python type annotations — missing annotations produce malformed schemas.
 
 ### Neutral / constraints
-- Skills are registered at startup in `services/api/app.py`; the registry is thread-safe.
+- Skills are registered at startup in `ai_systems/gateway/api/app.py`; the registry is thread-safe.

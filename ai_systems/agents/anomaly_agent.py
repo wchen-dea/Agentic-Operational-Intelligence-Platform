@@ -1,6 +1,6 @@
 from typing import Any
 
-from ai_system.tools.alert_tool import detect_kpi_alerts_for_store
+from ai_systems.tools.alert_tool import detect_kpi_alerts_for_store
 
 
 class AnomalyAgent:

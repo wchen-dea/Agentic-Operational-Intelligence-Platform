@@ -4,8 +4,8 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.sales_order_receipt.logging_util import log_message
-from data_platform.flink_jobs.sales_order_receipt.schema_builders import (
+from flink_job.sales_order_receipt.logging_util import log_message
+from flink_job.sales_order_receipt.schema_builders import (
     consumer_sor_canonical_schema_builder,
     producer_sor_schema_builder,
     producer_sor_line_item_schema_builder,
@@ -15,7 +15,7 @@ from data_platform.flink_jobs.sales_order_receipt.schema_builders import (
     producer_sor_li_tax_schema_builder,
     producer_sor_li_promo_schema_builder,
 )
-from data_platform.flink_jobs.sales_order_receipt.table_functions import (
+from flink_job.sales_order_receipt.table_functions import (
     extract_receipt_line_items,
     extract_receipt_payments,
     extract_receipt_promotions,
@@ -23,7 +23,7 @@ from data_platform.flink_jobs.sales_order_receipt.table_functions import (
     extract_receipt_li_taxes,
     extract_receipt_li_promos,
 )
-from data_platform.flink_jobs.sales_order_receipt.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.sales_order_receipt.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

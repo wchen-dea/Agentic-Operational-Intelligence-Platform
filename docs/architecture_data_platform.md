@@ -8,9 +8,9 @@ Eight-stage pipeline that transforms raw source-system events into a queryable I
 |---|-------|-------|--------|------|
 | 1 | **Ingestion** | Aurora MySQL / synthetic data | 15 canonical Avro Kafka topics (`Canonical*`) | `data_platform/producer/` `data_platform/schema/` |
 | 2 | **Flink Stream Processing** | `Canonical*` Kafka topics | PDM Sink Kafka topics (`Sink*`) | `data_platform/flink_job/` Flink :8082 |
-| 3 | **Kafka Connect JDBC Sink** | `Sink*` Kafka topics | MySQL ODS `retail_ops_sink` | `container/scripts/register_connectors.py` |
+| 3 | **Kafka Connect JDBC Sink** | `Sink*` Kafka topics | MySQL ODS `retail_ops` | `container/scripts/register_connectors.py` |
 | 4 | **Debezium CDC** | MySQL ODS binlog | `retail_ops.aurora.*` CDC topics | `container/scripts/register_cdc_connector.py` |
-| 5 | **Spark Streaming → Landing** | CDC Kafka topics | `iceberg.landing.*` (append) | `data_platform/batch/spark/cdc_to_landing.py` |
+| 5 | **Spark Streaming → Landing** | CDC Kafka topics | `iceberg.landing.*` (append) | `data_platform/spark/cdc_to_landing.py` |
 | 6 | **dbt Lakehouse** | `iceberg.landing.*` | `iceberg.bronze/silver/gold/analytics` | `data_platform/dbt/` Airflow :8085 |
 | 7 | **Analytics / ML / LLM** | `iceberg.gold/analytics` | Feature store, vector index, semantic layer | `data_platform/feature_store/` `data_platform/vector_index/` |
 
@@ -31,7 +31,7 @@ graph TB
 
     subgraph Stage3["Stage 3 · Kafka Connect JDBC Sink :8083"]
         KC["JDBC Sink Connectors\ncontainer/scripts/register_connectors.py"]
-        MYSQL["MySQL ODS :3306\nretail_ops_sink"]
+        MYSQL["MySQL ODS :3306\nretail_ops"]
     end
 
     subgraph Stage4["Stage 4 · Debezium CDC"]
@@ -39,7 +39,7 @@ graph TB
     end
 
     subgraph Stage5["Stage 5 · Spark Streaming → MinIO Landing"]
-        SPARK["Spark Structured Streaming\ndata_platform/batch/spark/cdc_to_landing.py"]
+        SPARK["Spark Structured Streaming\ndata_platform/spark/cdc_to_landing.py"]
         MINIO["MinIO :9000\nIceberg REST Catalog :8181\niceberg.landing.* (append-only)"]
     end
 
@@ -120,7 +120,7 @@ Submission: `data_platform/flink_job/start_flink_job.sh <name>` or `start_flink_
 
 One JDBC Sink connector per PDM table. The `ChangeCase` SMT converts Avro camelCase field names to MySQL snake_case. `register_connectors.py` builds connector configs programmatically and POSTs them to the Kafka Connect REST API.
 
-MySQL ODS database: `retail_ops_sink` · user: `connect_user` · DDL: `data_platform/ddl/`
+MySQL ODS database: `retail_ops` · user: `connect_user` · DDL: `data_platform/ddl/`
 
 ### Stage 4 — Debezium CDC
 
@@ -131,7 +131,7 @@ retail_ops.aurora.retail_ops.sales_orders
 retail_ops.aurora.retail_ops.appointments
 retail_ops.aurora.retail_ops.pos_invoices
 retail_ops.aurora.retail_ops.work_orders
-retail_ops.aurora.retail_ops.inventory_snapshots
+retail_ops.aurora.retail_ops.article_inventory
 ```
 
 Envelope: `{ "before": {...}, "after": {...}, "op": "c|u|d|r", "ts_ms": 123 }`

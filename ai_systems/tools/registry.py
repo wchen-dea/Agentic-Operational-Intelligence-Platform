@@ -2,8 +2,8 @@
 
 from functools import lru_cache
 
-from ai_system.skills import SkillRegistry
-from ai_system.tools.catalog import (
+from ai_systems.skills import SkillRegistry
+from ai_systems.tools.catalog import (
     DetectAnomaliesSkill,
     DiagnoseSignalsSkill,
     FetchKPISkill,

@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from ai_system.core.core.llm import generate, LLMUsage, _session_usage, _get_client, _extract_usage, settings
+from ai_systems.core.llm import generate, LLMUsage, _session_usage, _get_client, _extract_usage, settings
 import time
 
 logger = logging.getLogger(__name__)

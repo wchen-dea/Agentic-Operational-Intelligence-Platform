@@ -4,10 +4,10 @@ import logging
 import os
 from typing import Any
 
-from ai_system.core.core.llm import generate as core.llm_generate
-from ai_system.core.core.prompts import get_prompt_with_experiment
-from ai_system.alerting.threshold_config import threshold_max, threshold_min
-from ai_system.config.settings import settings
+from ai_systems.core.llm import generate as llm_generate
+from ai_systems.core.prompts import get_prompt_with_experiment
+from ai_systems.alerting.threshold_config import threshold_max, threshold_min
+from ai_systems.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ class RecommendationAgent:
     ) -> None:
         """Compute a quality score and record it for the A/B experiment."""
         try:
-            from ai_system.experimentation.manager.manager import get_experiment_manager
+            from ai_systems.experimentation.manager import get_experiment_manager
             from observability.evaluation import evaluator
 
             eval_ctx = {"kpis": kpis, "persona": persona, "question": "", "intent": "operational_brief"}

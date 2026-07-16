@@ -5,14 +5,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ai_system.agents.recommendation_agent import RecommendationAgent
-from ai_system.tools.alert_tool import detect_kpi_alerts_for_store
-from ai_system.tools.fetch_kpi_tool import fetch_store_kpis
-from ai_system.core.core.llm import generate as core.llm_generate
-from ai_system.core.core.prompts import OPERATIONAL_BRIEF
-from ai_system.retrieval.hybrid_search import LocalHybridSearch
-from ai_system.skills import Skill, SkillDescriptor, SkillParameter
-from ai_system.config.settings import settings
+from ai_systems.agents.recommendation_agent import RecommendationAgent
+from ai_systems.tools.alert_tool import detect_kpi_alerts_for_store
+from ai_systems.tools.fetch_kpi_tool import fetch_store_kpis
+from ai_systems.core.llm import generate as llm_generate
+from ai_systems.core.prompts import OPERATIONAL_BRIEF
+from ai_systems.retrieval.hybrid_search import LocalHybridSearch
+from ai_systems.skills import Skill, SkillDescriptor, SkillParameter
+from ai_systems.config.settings import settings
 
 
 class FetchKPISkill(Skill):

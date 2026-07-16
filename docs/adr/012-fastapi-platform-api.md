@@ -10,7 +10,7 @@ The AI platform needs a REST API that exposes agentic query endpoints, KPI retri
 
 ## Decision
 
-Use **FastAPI 0.111** as the web framework for the platform API (`services/api/`), served by **Uvicorn** (ASGI).
+Use **FastAPI 0.111** as the web framework for the platform API (`ai_systems/gateway/api/`), served by **Uvicorn** (ASGI).
 
 Key design decisions:
 - **7 route modules**: `query` (agentic), `kpi`, `alerts`, `operations`, `skills`, `streaming`, and `health`.
@@ -20,7 +20,7 @@ Key design decisions:
 - **Pydantic models** for all request/response schemas — automatic OpenAPI docs at `/docs`.
 - **`on_event("startup")`** initializes the orchestrator, skill registry, context assembler, and alert engine once at boot.
 
-The MCP server (`services/mcp_server.py`) runs as a separate process alongside the FastAPI app, exposing 5 tools, 2 resources, and 2 prompts via the Model Context Protocol.
+The MCP server (`ai_systems/gateway/mcp/server.py`) runs as a separate process alongside the FastAPI app, exposing 5 tools, 2 resources, and 2 prompts via the Model Context Protocol.
 
 ## Alternatives considered
 

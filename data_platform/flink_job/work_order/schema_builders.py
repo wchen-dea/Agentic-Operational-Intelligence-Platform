@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.work_order.data_types import (
+from flink_job.work_order.data_types import (
     get_line_items,
     get_bay_assignments,
     get_employees,

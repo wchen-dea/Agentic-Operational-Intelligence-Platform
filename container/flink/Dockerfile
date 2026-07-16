@@ -1,5 +1,7 @@
 FROM flink:2.2.0-scala_2.12-java17
 
+USER root
+
 # ---------------------------------------------------------------------------
 # Build arguments
 # ---------------------------------------------------------------------------
@@ -26,16 +28,18 @@ ENV FLINK_VERSION=${FLINK_VERSION:-2.2.0}
 COPY container/flink/target/kda-dependencies-*.jar /opt/flink/lib/
 
 # ---------------------------------------------------------------------------
-# Java 17 — install and create an arch-agnostic JAVA_HOME symlink so the
-# image works on both linux/amd64 and linux/arm64 without modification.
+# Ensure JDK headers exist for pemja (PyFlink dependency). Some Flink base
+# variants include only a JRE path at /opt/java/openjdk without include/*.h.
 # ---------------------------------------------------------------------------
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends openjdk-17-jdk && \
-    # Resolve the arch-specific path (e.g. java-17-openjdk-amd64 / arm64)
-    # and create a stable symlink that JAVA_HOME can point to.
-    ln -sf "$(ls -d /usr/lib/jvm/java-17-openjdk-* | head -1)" /usr/lib/jvm/java-17-openjdk && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+        find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print0 \
+            | xargs -0 sed -i 's|http://ports.ubuntu.com/ubuntu-ports|https://ports.ubuntu.com/ubuntu-ports|g' || true; \
+        apt-get update -y; \
+        apt-get install -y --no-install-recommends openjdk-17-jdk; \
+        ln -sfn "$(ls -d /usr/lib/jvm/java-17-openjdk-* | head -1)" /usr/lib/jvm/java-17-openjdk; \
+        test -d /usr/lib/jvm/java-17-openjdk/include; \
+        apt-get clean; \
+        rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.config.settings import settings
-from ai_system.tools.fetch_kpi_tool import fetch_store_kpis
-from ai_system.tools.alert_tool import detect_kpi_alerts_for_store
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.config.settings import settings
+from ai_systems.tools.fetch_kpi_tool import fetch_store_kpis
+from ai_systems.tools.alert_tool import detect_kpi_alerts_for_store
 
 router = APIRouter(tags=["alerts"])
 

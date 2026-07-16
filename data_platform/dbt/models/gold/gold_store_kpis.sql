@@ -1,8 +1,7 @@
 {{
     config(
         materialized  = 'table',
-        file_format   = 'iceberg',
-        post_hook     = "ANALYZE TABLE {{ this }} COMPUTE STATISTICS"
+        file_format   = 'iceberg'
     )
 }}
 

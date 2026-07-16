@@ -49,7 +49,7 @@ _BASE = {
     "connection.user": MYSQL_USER,
     "connection.password": MYSQL_PASSWORD,
     "dialect.name": "MySqlDatabaseDialect",
-    "auto.create": "false",
+    "auto.create": "true",
     "auto.evolve": "true",
     "max.retries": "5",
     "errors.tolerance": "all",
@@ -107,8 +107,8 @@ def _connectors():
             transforms="RenameField,ChangeCase",
             extra={
                 "transforms.RenameField.type": _RENAME,
-                "transforms.RenameField.renames": "inventoryDateTime:inventory_date",
-                "transforms.RenameField.include": "siteNumber,articleNumber,inventoryDateTime,onHandQuantity,"
+                "transforms.RenameField.renames": "inventoryDateTime:inventory_date,inventoryDate:inventory_date",
+                "transforms.RenameField.include": "siteNumber,articleNumber,inventoryDateTime,inventoryDate,onHandQuantity,"
                 "reservedQuantity,availableQuantity,inTransitQuantity,"
                 "layawayQuantity,weborderQuantity,purchaseDecisionCode,"
                 "purchaseDecisionDescription,timeOffset",
@@ -121,7 +121,7 @@ def _connectors():
             "reflexis_weekly_staff_metrics",
             "upsert",
             "record_value",
-            "site_number,system_store_identifier,system_department_identifier,staff_group,week_indicator,system_date_identifier",
+            "site_number,system_store_identifier,system_department_identifier,staff_group,system_date_identifier",
             transforms="RenameField,ChangeCase",
             extra={
                 "transforms.RenameField.type": _RENAME,
@@ -378,14 +378,16 @@ def _connectors():
             "SinkVehicleTireInspectionDetail",
             "vehicle_tire_inspection_detail",
             "upsert",
-            "kafka",
+            "record_value",
+            "inspection_identifier,tire_position_code",
         ),
         _cfg(
             "sink-jdbc-vehicle-tire-inspection-measurement",
             "SinkVehicleTireInspectionMeasurement",
             "vehicle_tire_inspection_measurement",
             "upsert",
-            "kafka",
+            "record_value",
+            "inspection_identifier,tire_position_code,measurement_location",
         ),
         # Work order
         _cfg(
@@ -395,8 +397,7 @@ def _connectors():
             "upsert",
             "record_key",
             "work_order_identifier",
-            transforms="RenameField,ChangeCase",
-            extra={"transforms.RenameField.type": _RENAME, "transforms.RenameField.renames": "VIN:vin"},
+            transforms="ChangeCase",
         ),
         _cfg(
             "sink-jdbc-work-order-bay-assignment",
@@ -414,7 +415,14 @@ def _connectors():
             "record_value",
             "work_order_identifier,employee_identifier",
         ),
-        _cfg("sink-jdbc-work-order-line-item", "SinkWorkOrderLineItem", "work_order_line_item", "upsert", "kafka"),
+        _cfg(
+            "sink-jdbc-work-order-line-item",
+            "SinkWorkOrderLineItem",
+            "work_order_line_item",
+            "upsert",
+            "record_value",
+            "work_order_identifier,line_item_number",
+        ),
         # Security
         _cfg(
             "sink-jdbc-agg-store-security",
@@ -462,20 +470,25 @@ def main():
     connectors = _connectors()
     print(f"=== Registering {len(connectors)} JDBC Sink connectors (ChangeCase: camelCase->snake_case) ===")
     _wait_for_connect()
-    ok = skipped = failed = 0
+    created = updated = failed = 0
     for conn in connectors:
         name = conn["name"]
         status, resp = _http("POST", "/connectors", conn)
         if status in (200, 201):
             print(f"  OK      {name:<55s}  {conn['config']['topics']} -> {conn['config']['table.name.format']}")
-            ok += 1
+            created += 1
         elif status == 409:
-            print(f"  SKIP    {name}")
-            skipped += 1
+            put_status, put_resp = _http("PUT", f"/connectors/{name}/config", conn["config"])
+            if put_status in (200, 201):
+                print(f"  UPDATE  {name:<55s}  {conn['config']['topics']} -> {conn['config']['table.name.format']}")
+                updated += 1
+            else:
+                print(f"  ERR {put_status} {name}: {put_resp.get('message', str(put_resp))[:100]}")
+                failed += 1
         else:
             print(f"  ERR {status} {name}: {resp.get('message', str(resp))[:100]}")
             failed += 1
-    print(f"\nDone: {ok} registered, {skipped} skipped, {failed} failed.")
+    print(f"\nDone: {created} created, {updated} updated, {failed} failed.")
     if failed:
         sys.exit(1)
 

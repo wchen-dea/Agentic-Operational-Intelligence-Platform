@@ -187,14 +187,14 @@ class IntentRouter:
         fallback_confidence: float,
     ) -> RouteResult | None:
         """Call Haiku for a structured intent classification. Returns None on any failure."""
-        from ai_system.config.settings import settings
+        from ai_systems.config.settings import settings
 
         if not os.environ.get(settings.llm.api_key_env_var):
             return None
 
         try:
-            from ai_system.core.core.llm import generate
-            from ai_system.core.core.model_router import TaskComplexity
+            from ai_systems.core.llm import generate
+            from ai_systems.core.model_router import TaskComplexity
 
             raw = generate(
                 prompt=_LLM_CLASSIFICATION_PROMPT.format(query=query),

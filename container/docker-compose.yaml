@@ -19,7 +19,7 @@ x-airflow-common: &airflow-common
     DBT_TARGET:       dev
   volumes:
     - ../container/airflow/dags:/opt/airflow/dags:ro
-    - ../data_platform/dbt:/opt/airflow/dbt:ro
+    - ../data_platform/dbt:/opt/airflow/dbt
     - airflow_logs:/opt/airflow/logs
   depends_on:
     airflow-postgres:
@@ -326,7 +326,7 @@ services:
           retail_ops.aurora.retail_ops.appointments \
           retail_ops.aurora.retail_ops.pos_invoices \
           retail_ops.aurora.retail_ops.work_orders \
-          retail_ops.aurora.retail_ops.inventory_snapshots; do
+          retail_ops.aurora.retail_ops.article_inventory; do
           kafka-topics --bootstrap-server $$BROKER \
             --create --if-not-exists \
             --topic $$TOPIC \
@@ -436,7 +436,7 @@ services:
   # ---------------------------------------------------------------------------
   # Conduktor Console — Kafka monitoring and management UI
   #
-  # Web UI   : http://localhost:8080
+  # Web UI   : http://localhost:8086
   # Login    : admin@conduktor.io / admin  (change via CDK_ADMIN_* vars)
   #
   # Features available in the UI:
@@ -452,7 +452,7 @@ services:
     labels:
       autoheal: conduktor-autoheal
     ports:
-      - "8080:8080"
+      - "8086:8080"
     environment:
       # Database
       CDK_DATABASE_URL: "postgresql://conduktor:conduktor_pass@postgresql:5432/conduktor_platform"
@@ -511,6 +511,7 @@ services:
   # PYTHONPATH are identical on every node.
   # ---------------------------------------------------------------------------
   flink-jobmanager:
+    platform: linux/amd64
     build:
       context: ..
       dockerfile: container/flink/Dockerfile
@@ -529,13 +530,13 @@ services:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         jobmanager.rpc.port: 6123
-        jobmanager.memory.process.size: 1600m
+        jobmanager.memory.process.size: 3200m
         web.submit.enable: true
         web.cancel.enable: true
-        state.backend: filesystem
+        state.backend: hashmap
         state.checkpoints.dir: file:///tmp/flink-checkpoints
         execution.checkpointing.interval: 60000
-        restart-strategy: fixed-delay
+        restart-strategy.type: fixed-delay
         restart-strategy.fixed-delay.attempts: 5
         restart-strategy.fixed-delay.delay: 10s
     healthcheck:
@@ -555,13 +556,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 2G
+          cpus: "2.0"
+          memory: 4G
         reservations:
-          cpus: "0.25"
-          memory: 1600M
+          cpus: "0.5"
+          memory: 3200M
 
   flink-taskmanager:
+    platform: linux/amd64
     build:
       context: ..
       dockerfile: container/flink/Dockerfile
@@ -578,8 +580,10 @@ services:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         jobmanager.rpc.port: 6123
-        taskmanager.memory.process.size: 3g
-        taskmanager.numberOfTaskSlots: 14
+        taskmanager.memory.process.size: 6g
+        taskmanager.memory.framework.off-heap.size: 512m
+        taskmanager.memory.task.off-heap.size: 1024m
+        taskmanager.numberOfTaskSlots: 28
         python.executable: python3
     depends_on:
       flink-jobmanager:
@@ -590,11 +594,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2.0"
-          memory: 3G
+          cpus: "4.0"
+          memory: 6G
         reservations:
-          cpus: "0.5"
-          memory: 2G
+          cpus: "1.0"
+          memory: 4G
 
   # ---------------------------------------------------------------------------
   # flink-runner — generic one-shot job submitter
@@ -613,6 +617,7 @@ services:
   #   voucher      work_order
   # ---------------------------------------------------------------------------
   flink-runner:
+    platform: linux/amd64
     build:
       context: ..
       dockerfile: container/flink/Dockerfile
@@ -666,7 +671,7 @@ services:
 
   #
   # All Kafka Connect JDBC Sink connectors write into this database.
-  # Database : retail_ops_sink
+  # Database : retail_ops
   # User     : connect_user / connect_pass  (Kafka Connect)
   # Root     : root / root_pass             (admin / migrations)
   # Port     : 3306 (also exposed on host for SQL clients / DBeaver)
@@ -679,7 +684,7 @@ services:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root_pass
-      MYSQL_DATABASE: retail_ops_sink
+      MYSQL_DATABASE: retail_ops
       MYSQL_USER: connect_user
       MYSQL_PASSWORD: connect_pass
     command: >
@@ -791,7 +796,7 @@ services:
   # connect-init — registers all JDBC Sink connectors (one-shot, exits 0)
   #
   # CDC connectors (5):
-  #   retail_ops.aurora.retail_ops.*  →  MySQL tables in retail_ops_sink
+  #   retail_ops.aurora.retail_ops.*  →  MySQL tables in retail_ops
   #   insert.mode=upsert, pk=event_id, converter=JSON
   #
   # Canonical connectors (15):
@@ -900,9 +905,9 @@ services:
     image: willfarrell/autoheal:latest
     restart: unless-stopped
     environment:
-      AUTOHEAL_CONTAINER_LABEL: conduktor-autoheal
-      AUTOHEAL_INTERVAL: 10
-      AUTOHEAL_START_PERIOD: 120
+      AUTOHEAL_CONTAINER_LABEL: autoheal=conduktor-autoheal
+      AUTOHEAL_INTERVAL: 5
+      AUTOHEAL_START_PERIOD: 60
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -1122,7 +1127,7 @@ services:
   # Console  : http://localhost:9001  (user: minioadmin / minioadmin)
   # ---------------------------------------------------------------------------
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     hostname: minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -1147,7 +1152,7 @@ services:
           memory: 512M
 
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-07-38Z
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
     restart: "no"
     depends_on:
       minio:
@@ -1165,27 +1170,29 @@ services:
   # Iceberg REST Catalog
   #
   # REST endpoint : http://localhost:8181  (internal: http://iceberg-rest:8181)
-  # Warehouse     : s3a://warehouse/  (backed by MinIO)
+  # Warehouse     : s3://landing/  (backed by MinIO)
   # ---------------------------------------------------------------------------
   iceberg-rest:
-    image: tabulario/iceberg-rest:1.6.1
+    image: tabulario/iceberg-rest:1.6.0
     hostname: iceberg-rest
     restart: unless-stopped
     ports:
       - "8181:8181"
     environment:
-      CATALOG_WAREHOUSE:                 s3a://warehouse/
+      CATALOG_WAREHOUSE:                 s3://landing/
       CATALOG_IO__IMPL:                  org.apache.iceberg.aws.s3.S3FileIO
       CATALOG_S3_ENDPOINT:               http://minio:9000
       CATALOG_S3_PATH__STYLE__ACCESS:    "true"
       CATALOG_S3_ACCESS__KEY__ID:        minioadmin
       CATALOG_S3_SECRET__ACCESS__KEY:    minioadmin
       CATALOG_S3_REGION:                 us-east-1
+      AWS_REGION:                        us-east-1
+      AWS_DEFAULT_REGION:                us-east-1
     depends_on:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8181/v1/config || exit 1"]
+      test: ["CMD-SHELL", "java -version >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -1203,7 +1210,7 @@ services:
   # Spark Thrift Server : jdbc:hive2://localhost:10000  (for dbt-spark)
   # ---------------------------------------------------------------------------
   spark-master:
-    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-master
     restart: unless-stopped
     command: ["spark-master"]
@@ -1231,10 +1238,66 @@ services:
           memory: 1G
 
   spark-worker:
-    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker
     restart: unless-stopped
-    command: ["spark-worker"]
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+    command:
+      - spark://spark-master:7077
+    environment:
+      SPARK_MASTER:          spark://spark-master:7077
+      SPARK_WORKER_CORES:    "2"
+      SPARK_WORKER_MEMORY:   2g
+      SPARK_NO_DAEMONIZE:    "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+
+  spark-worker-2:
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
+    hostname: spark-worker-2
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+    command:
+      - spark://spark-master:7077
+    environment:
+      SPARK_MASTER:          spark://spark-master:7077
+      SPARK_WORKER_CORES:    "2"
+      SPARK_WORKER_MEMORY:   2g
+      SPARK_NO_DAEMONIZE:    "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+
+  spark-worker-3:
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
+    hostname: spark-worker-3
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+    command:
+      - spark://spark-master:7077
     environment:
       SPARK_MASTER:          spark://spark-master:7077
       SPARK_WORKER_CORES:    "2"
@@ -1253,38 +1316,123 @@ services:
           memory: 3G
 
   # ---------------------------------------------------------------------------
+  # Dedicated Spark SQL cluster (master + worker) for Thrift/dbt workloads
+  # ---------------------------------------------------------------------------
+  spark-master-sql:
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
+    hostname: spark-master-sql
+    restart: unless-stopped
+    command: ["spark-master"]
+    ports:
+      - "4041:8080"    # Spark SQL Master Web UI
+      - "7078:7077"    # Spark SQL master RPC
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      iceberg-rest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  spark-worker-sql:
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
+    hostname: spark-worker-sql
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+    command:
+      - spark://spark-master-sql:7077
+    environment:
+      SPARK_MASTER:          spark://spark-master-sql:7077
+      SPARK_WORKER_CORES:    "2"
+      SPARK_WORKER_MEMORY:   2g
+      SPARK_NO_DAEMONIZE:    "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master-sql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+
+  spark-worker-sql-2:
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
+    hostname: spark-worker-sql-2
+    restart: unless-stopped
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+    command:
+      - spark://spark-master-sql:7077
+    environment:
+      SPARK_MASTER:          spark://spark-master-sql:7077
+      SPARK_WORKER_CORES:    "2"
+      SPARK_WORKER_MEMORY:   2g
+      SPARK_NO_DAEMONIZE:    "true"
+      AWS_ACCESS_KEY_ID:     minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION:            us-east-1
+    depends_on:
+      spark-master-sql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+
+  # ---------------------------------------------------------------------------
   # Spark Thrift Server — HiveServer2-compatible JDBC endpoint for dbt-spark
   #
   # JDBC : jdbc:hive2://localhost:10000
   # ---------------------------------------------------------------------------
   spark-thriftserver:
-    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-thriftserver
     restart: unless-stopped
+    # Keep bash + command as a single script string.
+    # If YAML tokenizes this into multiple args, bash -c runs only the first token,
+    # start-thriftserver exits immediately, and the container enters a restart loop.
+    entrypoint: ["/bin/bash", "-lc"]
     command:
-      - bash
-      - -c
-      - |
-        /opt/spark/sbin/start-thriftserver.sh \
-          --master spark://spark-master:7077 \
-          --hiveconf hive.server2.thrift.port=10000 \
-          --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-          --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-          --conf spark.sql.catalog.iceberg.type=rest \
-          --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181 \
-          --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-          --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000 \
-          --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
-          --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin \
-          --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin \
-          --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
-          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.path.style.access=true \
-          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
-        tail -f /opt/spark/logs/spark-*.out
+      - >
+        /opt/spark/sbin/start-thriftserver.sh --master spark://spark-master-sql:7077
+        --hiveconf hive.server2.thrift.port=10000
+        --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        --conf spark.sql.defaultCatalog=iceberg
+        --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog
+        --conf spark.sql.catalog.iceberg.type=rest
+        --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181
+        --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+        --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000
+        --conf spark.sql.catalog.iceberg.s3.path-style-access=true
+        --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin
+        --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin
+        --conf spark.sql.catalog.iceberg.warehouse=s3://landing/
+        --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000
+        --conf spark.hadoop.fs.s3a.access.key=minioadmin
+        --conf spark.hadoop.fs.s3a.secret.key=minioadmin
+        --conf spark.hadoop.fs.s3a.path.style.access=true
+        --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+        --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
+        exec tail -F /opt/spark/logs/spark-*.out
     ports:
       - "10000:10000"   # Thrift JDBC
     environment:
@@ -1292,10 +1440,18 @@ services:
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_REGION:            us-east-1
     depends_on:
-      spark-master:
+      spark-master-sql:
         condition: service_healthy
+      spark-worker-sql:
+        condition: service_started
+      spark-worker-sql-2:
+        condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "netstat -ln | grep 10000 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', 10000)); s.close()\" || exit 1",
+        ]
       interval: 20s
       timeout: 5s
       retries: 10
@@ -1313,36 +1469,39 @@ services:
   # restart: unless-stopped keeps the streaming job alive after broker restarts.
   # ---------------------------------------------------------------------------
   spark-cdc-streaming:
-    image: tabulario/spark-iceberg:3.5.1_1.5.2
+    image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-cdc-streaming
     restart: unless-stopped
+    entrypoint: ["/bin/bash", "-lc"]
     command:
-      - bash
-      - -c
       - |
-        spark-submit \
-          --master spark://spark-master:7077 \
-          --deploy-mode client \
-          --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
-          --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-          --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-          --conf spark.sql.catalog.iceberg.type=rest \
-          --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181 \
-          --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-          --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000 \
-          --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
-          --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin \
-          --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin \
-          --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
-          --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-          --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
-          --conf spark.hadoop.fs.s3a.path.style.access=true \
-          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
-          --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
-          /opt/spark/work-dir/cdc_to_landing.py --all
+        /opt/spark/bin/spark-submit \
+        --master spark://spark-master:7077 \
+        --deploy-mode client \
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+        --conf spark.executor.instances=3 \
+        --conf spark.executor.cores=2 \
+        --conf spark.cores.max=6 \
+        --conf spark.executor.memory=1g \
+        --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+        --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+        --conf spark.sql.catalog.iceberg.type=rest \
+        --conf spark.sql.catalog.iceberg.uri=http://iceberg-rest:8181 \
+        --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
+        --conf spark.sql.catalog.iceberg.s3.endpoint=http://minio:9000 \
+        --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
+        --conf spark.sql.catalog.iceberg.s3.access-key-id=minioadmin \
+        --conf spark.sql.catalog.iceberg.s3.secret-access-key=minioadmin \
+        --conf spark.sql.catalog.iceberg.warehouse=s3://landing/ \
+        --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+        --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+        --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+        --conf spark.hadoop.fs.s3a.path.style.access=true \
+        --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+        --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
+        /opt/spark/work-dir/cdc_to_landing.py --all
     volumes:
-      - ../data_platform/batch/spark/cdc_to_landing.py:/opt/spark/work-dir/cdc_to_landing.py:ro
+      - ../data_platform/spark/cdc_to_landing.py:/opt/spark/work-dir/cdc_to_landing.py:ro
     environment:
       KAFKA_BROKERS:      broker1:29092,broker2:29092,broker3:29092
       MINIO_ENDPOINT:     http://minio:9000
@@ -1357,6 +1516,12 @@ services:
     depends_on:
       spark-master:
         condition: service_healthy
+      spark-worker:
+        condition: service_started
+      spark-worker-2:
+        condition: service_started
+      spark-worker-3:
+        condition: service_started
       iceberg-rest:
         condition: service_healthy
       broker1:
@@ -1380,6 +1545,7 @@ services:
   # ---------------------------------------------------------------------------
   dbt-runner:
     image: ghcr.io/dbt-labs/dbt-spark:1.8.latest
+    platform: linux/amd64
     hostname: dbt-runner
     restart: "no"
     working_dir: /usr/app/dbt

@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.sales_order_receipt.data_types import (
+from flink_job.sales_order_receipt.data_types import (
     get_receipt_line_items,
     get_payments,
     get_receipt_promotions,

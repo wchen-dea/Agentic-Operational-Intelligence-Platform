@@ -87,7 +87,7 @@ kpis:
   direction: higher_is_better
   threshold_min: 0.90
   threshold_max: null
-  source_table: inventory_snapshots
+  source_table: article_inventory
 - name: low_stock_sku_count
   domain: inventory
   description: "Number of SKUs with stock below the reorder threshold."
@@ -96,7 +96,7 @@ kpis:
   direction: lower_is_better
   threshold_min: null
   threshold_max: null
-  source_table: inventory_snapshots
+  source_table: article_inventory
 - name: stockout_sku_count
   domain: inventory
   description: "Number of SKUs with zero available stock."
@@ -105,7 +105,7 @@ kpis:
   direction: lower_is_better
   threshold_min: null
   threshold_max: 3
-  source_table: inventory_snapshots
+  source_table: article_inventory
 - name: inventory_turnover_proxy
   domain: inventory
   description: "Proxy for inventory turnover calculated as orders per tracked SKU within the window."
@@ -114,7 +114,7 @@ kpis:
   direction: higher_is_better
   threshold_min: null
   threshold_max: null
-  source_table: inventory_snapshots
+  source_table: article_inventory
 # ── Work Order domain ─────────────────────────────────────────────
 - name: average_work_order_cycle_time_minutes
   domain: work_order

@@ -1,7 +1,7 @@
 from typing import Any
 
-from ai_system.config.settings import settings
-from ai_system.tools.alert_tool import load_rules
+from ai_systems.config.settings import settings
+from ai_systems.tools.alert_tool import load_rules
 
 
 def get_thresholds() -> dict[str, Any]:

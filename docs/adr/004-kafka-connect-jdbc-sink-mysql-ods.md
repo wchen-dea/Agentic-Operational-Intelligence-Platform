@@ -10,7 +10,7 @@ The Flink stream processing layer produces approximately 50 PDM Sink Kafka topic
 
 ## Decision
 
-Use **Kafka Connect JDBC Sink connectors** (Confluent JDBC Sink plugin) to write all PDM Sink topics directly into MySQL `retail_ops_sink` tables.
+Use **Kafka Connect JDBC Sink connectors** (Confluent JDBC Sink plugin) to write all PDM Sink topics directly into MySQL `retail_ops` tables.
 
 Key configuration decisions:
 - One connector instance per Sink topic (registered via `container/scripts/register_connectors.py`).

@@ -18,10 +18,10 @@ The platform decomposes into eight independently deployable stages:
 |---|-------|------|-------|--------|------|
 | 1 | **Ingestion** | Publishes source-system events as Avro messages to canonical Kafka topics | Aurora MySQL / synthetic data | 15 canonical Avro Kafka topics (`Canonical*`) | `data_platform/producer/` `data_platform/schema/` |
 | 2 | **Flink Stream Processing** | 14 PyFlink Table API jobs transform canonical topics into PDM Sink topics | `Canonical*` Kafka topics | `Sink*` Kafka topics | `data_platform/flink_job/` Flink :8082 |
-| 3 | **Kafka Connect JDBC Sink** | JDBC Sink connectors write PDM Sink topics to MySQL ODS tables | `Sink*` Kafka topics | MySQL `retail_ops_sink` :3306 | `container/scripts/register_connectors.py` |
-| 4 | **AI Systems (real-time)** | FastAPI + agentic AI layer queries MySQL ODS for KPIs, anomalies, and briefs | MySQL ODS | Agent responses, alerts | `services/api/` `ai_systems/` :8000 |
+| 3 | **Kafka Connect JDBC Sink** | JDBC Sink connectors write PDM Sink topics to MySQL ODS tables | `Sink*` Kafka topics | MySQL `retail_ops` :3306 | `container/scripts/register_connectors.py` |
+| 4 | **AI Systems (real-time)** | FastAPI + agentic AI layer queries MySQL ODS for KPIs, anomalies, and briefs | MySQL ODS | Agent responses, alerts | `ai_systems/gateway/api/` `ai_systems/` :8000 |
 | 5 | **Debezium CDC** | Debezium captures MySQL ODS changes into CDC Kafka topics | MySQL ODS binlog | `retail_ops.aurora.*` topics | `container/scripts/register_cdc_connector.py` |
-| 6 | **Spark Streaming → Landing** | Spark reads CDC topics, appends Debezium envelope to Iceberg landing tables | CDC Kafka topics | `iceberg.landing.*` (append) | `data_platform/batch/spark/cdc_to_landing.py` |
+| 6 | **Spark Streaming → Landing** | Spark reads CDC topics, appends Debezium envelope to Iceberg landing tables | CDC Kafka topics | `iceberg.landing.*` (append) | `data_platform/spark/cdc_to_landing.py` |
 | 7 | **dbt Lakehouse** | dbt transforms landing through bronze/silver/gold/analytics. Airflow schedules every 30 min | `iceberg.landing.*` | `iceberg.bronze/silver/gold/analytics` | `data_platform/dbt/` Airflow :8085 |
 | 8 | **Analytics / ML / LLM** | Feast materializes features; Qdrant indexes KPI embeddings; MetricFlow serves named metrics | `iceberg.gold/analytics` | Feature store (Redis), vector index, semantic layer | `data_platform/feature_store/` `data_platform/vector_index/` |
 
@@ -30,7 +30,7 @@ The platform decomposes into eight independently deployable stages:
 | Layer | Components |
 |-------|-----------|
 | **Ingestion (Stages 1–2)** | Source producer → Kafka (canonical Avro) → Flink (canonical → PDM Sink topics) |
-| **ODS Write (Stage 3)** | Kafka Connect JDBC Sink → MySQL `retail_ops_sink` |
+| **ODS Write (Stage 3)** | Kafka Connect JDBC Sink → MySQL `retail_ops` |
 | **Real-time AI (Stage 4)** | FastAPI + AI agents reading MySQL ODS directly |
 | **CDC Capture (Stage 5)** | Debezium → CDC Kafka topics |
 | **Lakehouse Ingestion (Stage 6)** | Spark Streaming → MinIO (Iceberg landing, append) |
@@ -43,7 +43,7 @@ The platform decomposes into eight independently deployable stages:
 flowchart LR
     S1["Stage 1\nIngestion\nSource systems → Canonical Avro topics"] -->|"Canonical*\nAvro"| S2
     S2["Stage 2\nFlink\nCanonical → PDM Sink topics"] -->|"Sink*\ntopics"| S3
-    S3["Stage 3\nKafka Connect\nJDBC Sink → MySQL ODS"] -->|"MySQL ODS\nretail_ops_sink"| S4
+    S3["Stage 3\nKafka Connect\nJDBC Sink → MySQL ODS"] -->|"MySQL ODS\nretail_ops"| S4
     S3 -->|"MySQL ODS"| S5
     S4["Stage 4\nAI Systems\nFastAPI + Agents\n(real-time path)"] --> OUT1["Store Manager\nBriefs"]
     S4 --> OUT2["Executive\nBriefs"]
@@ -134,11 +134,11 @@ flowchart LR
 | A/B experiments | `ai_systems/experimentation.py` |
 | Prompt registry | `ai_systems/prompts.py` |
 | Observability | `observability/evaluation.py` |
-| Auth + RBAC | `services/api/auth.py` |
-| MCP server | `services/mcp_server.py` |
+| Auth + RBAC | `ai_systems/gateway/api/auth.py` |
+| MCP server | `ai_systems/gateway/mcp/server.py` |
 | KPI semantic layer | `data_platform/semantic_layer.py` |
 | KPI catalog | `data_platform/kpi_catalog.yaml` |
-| Spark CDC streaming | `data_platform/batch/spark/cdc_to_landing.py` |
+| Spark CDC streaming | `data_platform/spark/cdc_to_landing.py` |
 | Feature store | `data_platform/feature_store/features.py` |
 | Vector indexer | `data_platform/vector_index/indexer.py` |
 | Flink jobs | `data_platform/flink_job/` |

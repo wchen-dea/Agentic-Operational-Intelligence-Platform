@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.customer.data_types import get_contacts, get_alternate_identifiers, get_vehicles
+from flink_job.customer.data_types import get_contacts, get_alternate_identifiers, get_vehicles
 
 
 def consumer_customer_canonical_schema_builder():

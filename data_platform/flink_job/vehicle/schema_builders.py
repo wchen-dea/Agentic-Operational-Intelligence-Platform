@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.vehicle.data_types import get_trims
+from flink_job.vehicle.data_types import get_trims
 
 
 def consumer_vehicle_canonical_schema_builder():

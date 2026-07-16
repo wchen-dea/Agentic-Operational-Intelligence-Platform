@@ -5,8 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.tools.registry import get_skill_registry
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.tools.registry import get_skill_registry
 
 router = APIRouter(tags=["skills"])
 

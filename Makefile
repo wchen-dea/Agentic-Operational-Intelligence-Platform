@@ -11,7 +11,11 @@ PYTHON        := $(VENV)/bin/python
 LOCAL_CONNECT_URL         := http://localhost:8083
 LOCAL_SCHEMA_REGISTRY_URL := http://localhost:8081
 LOCAL_KAFKA_BROKERS       := localhost:9092,localhost:9093,localhost:9094
-LOCAL_MYSQL_URL           := jdbc:mysql://localhost:3306/retail_ops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&sessionVariables=sql_mode=''
+LOCAL_MYSQL_URL           := jdbc:mysql://mysql:3306/retail_ops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&sessionVariables=sql_mode=''
+DDL_DIR                   := data_platform/ddl
+
+# Core local development services (fast startup, excludes heavy optional stacks).
+CORE_SERVICES := app redis mysql broker1 broker2 broker3 schema-registry kafka-connect
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 BOLD  := \033[1m
@@ -28,9 +32,11 @@ help:
 	@printf "  %-28s %s\n" "make install-streaming" "Install streaming extras (confluent-kafka, fastavro …)"
 	@printf "  %-28s %s\n" "make env"               "Copy .env.example → .env (edit afterwards)"
 	@printf "\n$(CYAN)Docker stack$(RESET)\n"
-	@printf "  %-28s %s\n" "make up"                "Start the full stack (build images first if needed)"
+	@printf "  %-28s %s\n" "make up"                "Start core local services only (app + kafka + mysql + redis)"
+	@printf "  %-28s %s\n" "make up-full"           "Start full stack (includes Airflow/Flink/lakehouse/analytics)"
 	@printf "  %-28s %s\n" "make down"              "Stop and remove all containers"
-	@printf "  %-28s %s\n" "make restart"           "Stop then start the full stack"
+	@printf "  %-28s %s\n" "make restart"           "Stop then start the core local stack"
+	@printf "  %-28s %s\n" "make restart-full"      "Stop then start the full local stack"
 	@printf "  %-28s %s\n" "make rebuild"           "Force-rebuild images and restart"
 	@printf "  %-28s %s\n" "make ps"                "Show container status"
 	@printf "  %-28s %s\n" "make logs"              "Tail logs for all services (Ctrl-C to exit)"
@@ -39,6 +45,8 @@ help:
 	@printf "  %-28s %s\n" "make register-schemas"  "Register all Avro schemas into Schema Registry"
 	@printf "  %-28s %s\n" "make register-connectors" "Register JDBC Sink connectors for PDM tables"
 	@printf "  %-28s %s\n" "make register-cdc"      "Register the CDC (Debezium) connector"
+	@printf "  %-28s %s\n" "make ddl-apply"         "Apply all SQL files under data_platform/ddl to MySQL"
+	@printf "  %-28s %s\n" "make ddl-status"        "Show table count in retail_ops"
 	@printf "  %-28s %s\n" "make produce"           "Start the synthetic producer service (all topics, 0.5 s interval)"
 	@printf "  %-28s %s\n" "make produce-stop"      "Stop the producer service"
 	@printf "  %-28s %s\n" "make logs-producer"     "Tail producer logs"
@@ -55,6 +63,7 @@ help:
 	@printf "\n$(CYAN)Flink$(RESET)\n"
 	@printf "  %-28s %s\n" "make flink-jar"         "Build connector fat JAR with Maven (required before flink-up)"
 	@printf "  %-28s %s\n" "make flink-up"          "Build and start JobManager + TaskManager"
+	@printf "  %-28s %s\n" "make flink-refresh"     "Force-recreate Flink services to pick up compose/env changes"
 	@printf "  %-28s %s\n" "make flink-run JOB=<name>" "Submit a single pipeline to the cluster"
 	@printf "  %-28s %s\n" "make flink-submit"      "Submit all 14 pipelines to the cluster"
 	@printf "  %-28s %s\n" "make flink-cancel JOB_ID=<id>" "Cancel a running job by Flink job ID"
@@ -90,9 +99,32 @@ env:
 	fi
 
 # ── Docker stack ──────────────────────────────────────────────────────────────
+.PHONY: _ensure-flink-jar
+_ensure-flink-jar:
+	@if ! ls container/flink/target/kda-dependencies-*.jar >/dev/null 2>&1; then \
+		echo "Flink connector JAR not found; building it now..."; \
+		$(MAKE) flink-jar; \
+	fi
+
 .PHONY: up
 up: _require-env
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d $(CORE_SERVICES)
+
+.PHONY: up-full
+up-full: _require-env _ensure-flink-jar
+	@echo "[1/6] Starting core services..."
+	@$(MAKE) up
+	@echo "[2/6] Bootstrapping Kafka/Schema/Conduktor helpers..."
+	$(COMPOSE) up -d kafka-init schema-registry-init connect-init cdc-init autoheal conduktor-console
+	@echo "[3/6] Starting Flink cluster..."
+	@$(MAKE) flink-up
+	@echo "[4/6] Starting lakehouse services..."
+	@$(MAKE) lake-up
+	@echo "[5/6] Starting Airflow services..."
+	@$(MAKE) airflow-up
+	@echo "[6/6] Starting analytics services..."
+	@$(MAKE) analytics-up
+	@echo "Full local stack started."
 
 .PHONY: down
 down:
@@ -101,8 +133,11 @@ down:
 .PHONY: restart
 restart: down up
 
+.PHONY: restart-full
+restart-full: down up-full
+
 .PHONY: rebuild
-rebuild: _require-env
+rebuild: _require-env _ensure-flink-jar
 	$(COMPOSE) build --no-cache
 	$(COMPOSE) --profile producer up -d
 
@@ -125,22 +160,22 @@ logs-conduktor:
 # ── Kafka / Schemas ───────────────────────────────────────────────────────────
 .PHONY: register-schemas
 register-schemas:
-	SCHEMA_REGISTRY_URL=$(LOCAL_SCHEMA_REGISTRY_URL) \
-	SCHEMAS_DIR=data_platform/schema \
+	SCHEMA_REGISTRY_URL="$(LOCAL_SCHEMA_REGISTRY_URL)" \
+	SCHEMAS_DIR="data_platform/schema" \
 	$(PYTHON) container/scripts/register_schemas.py
 
 .PHONY: register-connectors
 register-connectors:
-	CONNECT_URL=$(LOCAL_CONNECT_URL) \
-	SCHEMA_REGISTRY_URL=$(LOCAL_SCHEMA_REGISTRY_URL) \
-	MYSQL_URL=$(LOCAL_MYSQL_URL) \
+	CONNECT_URL="$(LOCAL_CONNECT_URL)" \
+	SCHEMA_REGISTRY_URL="$(LOCAL_SCHEMA_REGISTRY_URL)" \
+	MYSQL_URL="$(LOCAL_MYSQL_URL)" \
 	$(PYTHON) container/scripts/register_connectors.py
 
 .PHONY: register-cdc
 register-cdc:
-	CONNECT_URL=$(LOCAL_CONNECT_URL) \
+	CONNECT_URL="$(LOCAL_CONNECT_URL)" \
 	MYSQL_HOST=localhost \
-	KAFKA_BOOTSTRAP_SERVERS=$(LOCAL_KAFKA_BROKERS) \
+	KAFKA_BOOTSTRAP_SERVERS="$(LOCAL_KAFKA_BROKERS)" \
 	$(PYTHON) container/scripts/register_cdc_connector.py
 
 .PHONY: produce
@@ -160,6 +195,43 @@ topics:
 	docker exec $$(docker ps -qf name=broker1) \
 		kafka-topics --bootstrap-server localhost:9092 --list \
 		| grep -v '^__'
+
+.PHONY: ddl-apply
+ddl-apply:
+	@echo "Applying DDL files from $(DDL_DIR) to MySQL..."
+	@$(COMPOSE) up -d mysql >/dev/null
+	@echo "Waiting for MySQL readiness..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) exec -T mysql mysqladmin ping -h localhost -uconnect_user -pconnect_pass --silent >/dev/null 2>&1; then \
+			break; \
+		fi; \
+		sleep 2; \
+		if [ $$i -eq 30 ]; then \
+			echo "MySQL did not become ready in time."; \
+			exit 1; \
+		fi; \
+	done
+	@for ddl in $$(ls $(DDL_DIR)/*.sql | sort); do \
+		echo "  --> $$ddl"; \
+		$(COMPOSE) exec -T mysql mysql -uroot -proot_pass < "$$ddl"; \
+	done
+	@echo "DDL apply complete."
+
+.PHONY: ddl-status
+ddl-status:
+	@$(COMPOSE) up -d mysql >/dev/null
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE) exec -T mysql mysqladmin ping -h localhost -uconnect_user -pconnect_pass --silent >/dev/null 2>&1; then \
+			break; \
+		fi; \
+		sleep 2; \
+		if [ $$i -eq 30 ]; then \
+			echo "MySQL did not become ready in time."; \
+			exit 1; \
+		fi; \
+	done
+	@echo "Current table count in retail_ops:"
+	@$(COMPOSE) exec -T mysql mysql -uroot -proot_pass -e "SELECT table_schema, COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema = 'retail_ops' GROUP BY table_schema;"
 
 # ── App ───────────────────────────────────────────────────────────────────────
 .PHONY: dev
@@ -196,6 +268,40 @@ FLINK_PIPELINES := appointment article crewtime customer employee \
                    inventory kronos_hours sales_order sales_order_receipt \
                    site vehicle vehicle_inspection voucher work_order
 
+.PHONY: _flink-up-services
+_flink-up-services:
+	@$(COMPOSE) up -d flink-jobmanager flink-taskmanager
+
+.PHONY: _flink-wait-jobmanager
+_flink-wait-jobmanager:
+	@echo "Waiting for Flink JobManager and TaskManager slots to become ready..."
+	@for i in $$(seq 1 45); do \
+		if curl -sf --noproxy '*' http://localhost:8082/overview | python3 -c 'import json,sys; o=json.load(sys.stdin); ok=(o.get("taskmanagers",0) >= 1 and o.get("slots-total",0) >= 1 and o.get("slots-available",0) >= 1); raise SystemExit(0 if ok else 1)' >/dev/null 2>&1; then \
+			echo "Flink cluster is ready (taskmanagers and slots available)."; \
+			exit 0; \
+		fi; \
+		sleep 2; \
+	done; \
+	echo "Flink cluster did not become ready in time."; \
+	exit 1
+
+.PHONY: _flink-submit-job
+_flink-submit-job:
+	@if [ -z "$(JOB)" ]; then \
+		echo "$(BOLD)Usage$(RESET): make _flink-submit-job JOB=<pipeline>"; \
+		exit 1; \
+	fi
+	@$(COMPOSE) exec -T -e JOB_NAME=$(JOB) flink-jobmanager bash -lc '\
+		set -e; \
+		JOB_SCRIPT="/opt/flink/usrlib/flink_job/$$JOB_NAME/main.py"; \
+		if [ ! -f "$$JOB_SCRIPT" ]; then \
+			echo "ERROR: Pipeline script not found: $$JOB_SCRIPT"; \
+			exit 1; \
+		fi; \
+		echo "==> Submitting pipeline: $$JOB_NAME"; \
+		flink run -d -py "$$JOB_SCRIPT" -pyfs /opt/flink/usrlib -pyexec python3 \
+	'
+
 .PHONY: flink-jar
 flink-jar:
 	mvn package -f container/flink/pom.xml -q
@@ -203,23 +309,29 @@ flink-jar:
 
 .PHONY: flink-up
 flink-up: flink-jar _require-env
-	$(COMPOSE) up -d flink-jobmanager flink-taskmanager
+	@$(MAKE) --no-print-directory _flink-up-services
+	@$(MAKE) --no-print-directory _flink-wait-jobmanager
+
+.PHONY: flink-refresh
+flink-refresh: _require-env
+	$(COMPOSE) up -d --force-recreate flink-jobmanager flink-taskmanager
+	@$(MAKE) --no-print-directory _flink-wait-jobmanager
 
 .PHONY: flink-run
-flink-run: _require-env
+flink-run: _require-env _flink-up-services _flink-wait-jobmanager
 	@if [ -z "$(JOB)" ]; then \
 		echo "$(BOLD)Usage$(RESET): make flink-run JOB=<pipeline>"; \
 		echo "Available: $(FLINK_PIPELINES)"; \
 		exit 1; \
 	fi
-	$(COMPOSE) run --rm -e JOB_NAME=$(JOB) flink-runner
+	@$(MAKE) --no-print-directory _flink-submit-job JOB=$(JOB)
 
 .PHONY: flink-submit
-flink-submit: _require-env
+flink-submit: _require-env _flink-up-services _flink-wait-jobmanager
 	@echo "Submitting all $(words $(FLINK_PIPELINES)) pipelines..."
 	@for job in $(FLINK_PIPELINES); do \
 		echo "  --> $$job"; \
-		$(COMPOSE) run --rm -e JOB_NAME=$$job flink-runner || echo "  [WARN] $$job submission failed"; \
+		$(MAKE) --no-print-directory _flink-submit-job JOB=$$job || echo "  [WARN] $$job submission failed"; \
 	done
 	@echo "All pipelines submitted. Check http://localhost:8082 for status."
 
@@ -261,7 +373,7 @@ conduktor-restart:
 
 .PHONY: conduktor-health
 conduktor-health:
-	curl -sf --max-time 5 --noproxy '*' http://localhost:8080/api/health \
+	curl -sf --max-time 5 --noproxy '*' http://localhost:8086/api/health \
 		&& echo "$(GREEN)healthy$(RESET)" || echo "unhealthy"
 
 # ── Lakehouse (Spark + Iceberg + dbt) ────────────────────────────────────────

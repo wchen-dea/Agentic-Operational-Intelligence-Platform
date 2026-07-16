@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.sales_order.data_types import get_promotions, get_line_items
+from flink_job.sales_order.data_types import get_promotions, get_line_items
 
 
 def consumer_sales_order_canonical_schema_builder():

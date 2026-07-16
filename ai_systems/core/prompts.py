@@ -278,7 +278,7 @@ def get_prompt_with_experiment(
     based on ``session_id``.  When no experiment is active for ``name``,
     the 'default' variant is returned.
     """
-    from ai_system.experimentation.manager.manager import get_experiment_manager
+    from ai_systems.experimentation.manager import get_experiment_manager
 
     mgr = get_experiment_manager()
     variant = mgr.assign_variant(name, session_id=session_id or "anonymous")

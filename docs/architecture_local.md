@@ -12,7 +12,7 @@ graph TB
         B3["broker3 :9094"]
         SR["Schema Registry :8081"]
         KC["Kafka Connect :8083"]
-        CDK["Conduktor :8080\nKafka UI"]
+        CDK["Conduktor :8086\nKafka UI"]
     end
 
     subgraph DataPlatform["Data Platform"]
@@ -21,7 +21,7 @@ graph TB
     end
 
     subgraph ODS["MySQL ODS"]
-        MYSQL["MySQL :3306\nretail_ops_sink"]
+        MYSQL["MySQL :3306\nretail_ops"]
     end
 
     subgraph Lakehouse["Iceberg Lakehouse"]
@@ -76,9 +76,9 @@ graph TB
 | `broker3` | confluentinc/cp-kafka:7.9.8 | 9094, 9103 (JMX) | Kafka broker 3 (KRaft) |
 | `schema-registry` | confluentinc/cp-schema-registry:7.9.8 | 8081 | Avro schema catalog |
 | `kafka-connect` | custom (confluentinc base + plugins) | 8083 | JDBC Sink + Debezium CDC |
-| `conduktor-console` | conduktor/conduktor-console:1.25.0 | 8080 | Kafka management UI |
+| `conduktor-console` | conduktor/conduktor-console:1.25.0 | 8086 | Kafka management UI |
 | `postgresql` (Conduktor) | postgres:16-alpine | — (internal) | Conduktor metadata DB |
-| `mysql` | mysql:8.0 | 3306 | MySQL ODS (`retail_ops_sink`) |
+| `mysql` | mysql:8.0 | 3306 | MySQL ODS (`retail_ops`) |
 | `redis` | redis:7-alpine | 6379 | Session cache + Feast online store |
 | `app` | custom (container/Dockerfile) | 8000 | FastAPI platform API |
 | `producer` | custom (container/Dockerfile) | — | Synthetic Avro producer (profile) |
@@ -171,7 +171,7 @@ airflow-postgres (healthy)
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Platform API | http://localhost:8000 | `X-API-Key` header |
-| Conduktor | http://localhost:8080 | admin@conduktor.io / admin |
+| Conduktor | http://localhost:8086 | admin@conduktor.io / admin |
 | Schema Registry | http://localhost:8081 | — |
 | Flink Dashboard | http://localhost:8082 | — |
 | Kafka Connect REST | http://localhost:8083 | — |
@@ -191,7 +191,7 @@ airflow-postgres (healthy)
 | Volume | Contents |
 |--------|----------|
 | `broker1_data`, `broker2_data`, `broker3_data` | Kafka KRaft log data |
-| `mysql_data` | MySQL ODS (`retail_ops_sink`) |
+| `mysql_data` | MySQL ODS (`retail_ops`) |
 | `postgresql_data` | Conduktor metadata |
 | `airflow_postgres_data` | Airflow metadata |
 | `minio_data` | Iceberg table files (all layers) |

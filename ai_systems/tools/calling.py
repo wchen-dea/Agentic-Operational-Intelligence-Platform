@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ai_system.core.core.llm import generate_with_tools
-from ai_system.tools.registry import get_skill_registry
+from ai_systems.core.llm import generate_with_tools
+from ai_systems.tools.registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def agentic_query(
 
     if not tool_schemas:
         logger.warning("No tools available for agentic query; falling back to plain generation.")
-        from ai_system.core.core.llm import generate as core.llm_generate
+        from ai_systems.core.llm import generate as llm_generate
 
         return {
             "answer": llm_generate(question, system=system, max_tokens=max_tokens),

@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from ai_system.alerting.engine import detect_alerts
+from ai_systems.alerting.engine import detect_alerts
 
 logger = logging.getLogger(__name__)
 

@@ -4,12 +4,12 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.voucher.logging_util import log_message
-from data_platform.flink_jobs.voucher.schema_builders import (
+from flink_job.voucher.logging_util import log_message
+from flink_job.voucher.schema_builders import (
     consumer_voucher_canonical_schema_builder,
     producer_voucher_schema_builder,
 )
-from data_platform.flink_jobs.voucher.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.voucher.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

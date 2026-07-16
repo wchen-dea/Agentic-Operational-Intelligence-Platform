@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
-from ai_system.config.settings import settings
+from ai_systems.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

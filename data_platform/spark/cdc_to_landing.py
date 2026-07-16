@@ -42,11 +42,37 @@ logger = logging.getLogger("spark.cdc_to_landing")
 # Topic → landing table mapping
 # ---------------------------------------------------------------------------
 CDC_TOPICS: dict[str, str] = {
-    "retail_ops.aurora.retail_ops.sales_orders": "sales_orders",
-    "retail_ops.aurora.retail_ops.appointments": "appointments",
-    "retail_ops.aurora.retail_ops.pos_invoices": "pos_invoices",
-    "retail_ops.aurora.retail_ops.work_orders": "work_orders",
-    "retail_ops.aurora.retail_ops.inventory_snapshots": "inventory_snapshots",
+    "cdc_appointment": "appointments",
+    "cdc_appointment_slot_reservation": "appointment_slot_reservations",
+    "cdc_article": "articles",
+    "cdc_sales_order": "sales_orders",
+    "cdc_article_inventory": "article_inventory",
+    "cdc_customer": "customers",
+    "cdc_customer_alternate_identifier": "customer_alternate_identifiers",
+    "cdc_customer_contact": "customer_contacts",
+    "cdc_customer_vehicle": "customer_vehicles",
+    "cdc_employee": "employees",
+    "cdc_kronos_hours": "kronos_hours",
+    "cdc_reflexis_weekly_staff_metrics": "reflexis_weekly_staff_metrics",
+    "cdc_sales_order_line_item": "sales_order_line_items",
+    "cdc_sales_order_line_item_fee": "sales_order_line_item_fees",
+    "cdc_sales_order_line_item_tax": "sales_order_line_item_taxes",
+    "cdc_sales_order_promotion": "sales_order_promotions",
+    "cdc_sales_order_receipt": "sales_order_receipts",
+    "cdc_sales_order_receipt_line_item": "sales_order_receipt_line_items",
+    "cdc_sales_order_receipt_line_item_fee": "sales_order_receipt_line_item_fees",
+    "cdc_sales_order_receipt_line_item_tax": "sales_order_receipt_line_item_taxes",
+    "cdc_sales_order_receipt_payment": "sales_order_receipt_payments",
+    "cdc_site": "sites",
+    "cdc_vehicle": "vehicles",
+    "cdc_vehicle_inspection": "vehicle_inspections",
+    "cdc_vehicle_tire_inspection_detail": "vehicle_tire_inspection_details",
+    "cdc_vehicle_tire_inspection_measurement": "vehicle_tire_inspection_measurements",
+    "cdc_voucher": "vouchers",
+    "cdc_work_order": "work_orders",
+    "cdc_work_order_bay_assignment": "work_order_bay_assignments",
+    "cdc_work_order_employee": "work_order_employees",
+    "cdc_work_order_line_item": "work_order_line_items",
 }
 
 # ---------------------------------------------------------------------------
@@ -78,7 +104,7 @@ def _build_spark_session():
         .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
         .config("spark.sql.catalog.iceberg.s3.access-key-id", MINIO_ACCESS_KEY)
         .config("spark.sql.catalog.iceberg.s3.secret-access-key", MINIO_SECRET_KEY)
-        .config("spark.sql.catalog.iceberg.warehouse", "s3a://warehouse/")
+        .config("spark.sql.catalog.iceberg.warehouse", "s3://landing/")
         # ── S3A (Hadoop MinIO) ────────────────────────────────────────────
         .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
         .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY)
@@ -111,13 +137,7 @@ _DEBEZIUM_SCHEMA = """
 def _stream_topic(spark, topic: str, table_name: str) -> None:
     """Start a streaming query for a single CDC topic → Iceberg landing table."""
     from pyspark.sql import functions as F
-    from pyspark.sql.types import (
-        LongType,
-        StringType,
-        StructField,
-        StructType,
-        TimestampType,
-    )
+    from pyspark.sql.types import LongType
 
     # Create the Iceberg namespace + table if they don't exist
     spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.landing")
@@ -142,10 +162,28 @@ def _stream_topic(spark, topic: str, table_name: str) -> None:
         )
     """)
 
+    checkpoint_location = f"{CHECKPOINT_BASE}/{table_name}"
+
+    # Ensure checkpoint directories exist before starting the stream.
+    # This avoids transient FileNotFound errors when recovering after cleanup
+    # or after object-store path churn.
+    jvm = spark._jvm
+    hadoop_conf = spark._jsc.hadoopConfiguration()
+    fs = jvm.org.apache.hadoop.fs.Path(checkpoint_location).getFileSystem(hadoop_conf)
+    for suffix in ("", "/offsets", "/commits", "/sources"):
+        fs.mkdirs(jvm.org.apache.hadoop.fs.Path(f"{checkpoint_location}{suffix}"))
+
     # Read from Kafka
     raw = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BROKERS)
+        .option("kafka.client.dns.lookup", "use_all_dns_ips")
+        .option("kafka.request.timeout.ms", "60000")
+        .option("kafka.default.api.timeout.ms", "60000")
+        .option("kafka.retry.backoff.ms", "500")
+        .option("kafka.reconnect.backoff.ms", "500")
+        .option("kafka.reconnect.backoff.max.ms", "10000")
+        .option("kafka.metadata.max.age.ms", "30000")
         .option("subscribe", topic)
         .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
@@ -174,7 +212,7 @@ def _stream_topic(spark, topic: str, table_name: str) -> None:
     query = (
         parsed.writeStream.format("iceberg")
         .outputMode("append")
-        .option("checkpointLocation", f"{CHECKPOINT_BASE}/{table_name}")
+        .option("checkpointLocation", checkpoint_location)
         .toTable(f"iceberg.landing.{table_name}")
     )
 
@@ -201,6 +239,28 @@ def main() -> None:
 
     spark = _build_spark_session()
     spark.sparkContext.setLogLevel("WARN")
+
+    # Some container images may preload Spark defaults that override catalog
+    # settings at startup. Re-apply catalog conf before first Iceberg access.
+    spark.conf.set("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
+    spark.conf.set("spark.sql.catalog.iceberg.type", "rest")
+    spark.conf.set("spark.sql.catalog.iceberg.uri", ICEBERG_REST_URL)
+    spark.conf.set("spark.sql.catalog.iceberg.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
+    spark.conf.set("spark.sql.catalog.iceberg.s3.endpoint", MINIO_ENDPOINT)
+    spark.conf.set("spark.sql.catalog.iceberg.s3.path-style-access", "true")
+    spark.conf.set("spark.sql.catalog.iceberg.s3.access-key-id", MINIO_ACCESS_KEY)
+    spark.conf.set("spark.sql.catalog.iceberg.s3.secret-access-key", MINIO_SECRET_KEY)
+    spark.conf.set("spark.sql.catalog.iceberg.warehouse", "s3://landing/")
+    spark.conf.set("spark.sql.defaultCatalog", "iceberg")
+
+    logger.info(
+        "Effective Iceberg catalog config: type=%s uri=%s warehouse=%s endpoint=%s",
+        spark.conf.get("spark.sql.catalog.iceberg.type", "<missing>"),
+        spark.conf.get("spark.sql.catalog.iceberg.uri", "<missing>"),
+        spark.conf.get("spark.sql.catalog.iceberg.warehouse", "<missing>"),
+        spark.conf.get("spark.sql.catalog.iceberg.s3.endpoint", "<missing>"),
+    )
+    logger.info("Effective Spark default catalog: %s", spark.conf.get("spark.sql.defaultCatalog", "<missing>"))
 
     queries = []
     for topic, table_name in topics_to_run.items():

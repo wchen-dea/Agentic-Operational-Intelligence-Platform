@@ -1,4 +1,11 @@
 version: 2
+models:
+- name: metricflow_time_spine
+  description: Daily calendar table required by MetricFlow semantic layer.
+  config:
+    meta:
+      metricflow_time_spine:
+        standard_granularity_column: date_day
 # ---------------------------------------------------------------------------
 # dbt Semantic Layer — MetricFlow metric definitions
 #
@@ -97,6 +104,60 @@ metrics:
   type: simple
   type_params:
     measure: avg_order_value
+- name: appointment_count
+  label: "Appointment Count"
+  description: Total scheduled appointments.
+  type: simple
+  type_params:
+    measure: appointment_count
+- name: appointment_show_count
+  label: "Appointment Show Count"
+  description: Total appointments where the customer showed up.
+  type: simple
+  type_params:
+    measure: appointment_show_count
+- name: appt_to_order_count
+  label: "Appointment-to-Order Count"
+  description: Total showed appointments that converted to orders.
+  type: simple
+  type_params:
+    measure: appt_to_order_count
+- name: invoice_total
+  label: "Invoice Total"
+  description: Total invoiced amount.
+  type: simple
+  type_params:
+    measure: invoice_total
+- name: refund_total
+  label: "Refund Total"
+  description: Total refunded amount.
+  type: simple
+  type_params:
+    measure: refund_total
+- name: work_order_count
+  label: "Work Order Count"
+  description: Total work orders.
+  type: simple
+  type_params:
+    measure: work_order_count
+- name: overdue_work_order_count
+  label: "Overdue Work Order Count"
+  description: Total overdue work orders.
+  type: simple
+  type_params:
+    measure: overdue_work_order_count
+- name: sku_count
+  label: "SKU Count"
+  description: Total SKUs in snapshot.
+  type: simple
+  type_params:
+    measure: sku_count
+- name: in_stock_sku_count
+  label: "In-Stock SKU Count"
+  description: Total SKUs with available inventory.
+  type: simple
+  type_params:
+    measure: in_stock_sku_count
 - name: appointment_show_rate
   label: "Appointment Show Rate"
   description: Percentage of scheduled appointments where the customer showed up.

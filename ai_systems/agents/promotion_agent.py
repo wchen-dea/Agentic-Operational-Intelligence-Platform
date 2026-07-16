@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai_system.alerting.threshold_config import threshold_max, threshold_min
+from ai_systems.alerting.threshold_config import threshold_max, threshold_min
 
 
 class PromotionAgent:

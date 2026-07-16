@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ai_system.gateway.api.models import AskRequest
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.orchestration.orchestrator import Orchestrator, get_orchestrator
-from ai_system.core.core.guardrails import validate_input
+from ai_systems.gateway.api.models import AskRequest
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.orchestration.orchestrator import Orchestrator, get_orchestrator
+from ai_systems.core.guardrails import validate_input
 
 router = APIRouter(tags=["query"])
 

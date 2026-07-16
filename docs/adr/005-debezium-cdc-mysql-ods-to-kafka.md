@@ -13,7 +13,7 @@ The platform requires a second Kafka ingestion path that captures every change (
 Use a **Debezium MySQL source connector** (running inside the Kafka Connect cluster) to capture MySQL ODS binlog events and publish them as Debezium-envelope JSON to CDC Kafka topics.
 
 Configuration:
-- One connector instance covers all five ODS tables (`sales_orders`, `appointments`, `pos_invoices`, `work_orders`, `inventory_snapshots`).
+- One connector instance covers all five ODS tables (`sales_orders`, `appointments`, `pos_invoices`, `work_orders`, `article_inventory`).
 - Registered via `container/scripts/register_cdc_connector.py`.
 - Topic naming: `retail_ops.aurora.retail_ops.<table>` (mirrors the AWS DMS/MSK convention for production compatibility).
 - Debezium envelope schema: `{ "before": {...}, "after": {...}, "op": "c|u|d|r", "ts_ms": 123, "source": {...} }`.

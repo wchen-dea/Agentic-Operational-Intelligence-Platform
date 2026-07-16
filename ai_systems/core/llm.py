@@ -12,8 +12,8 @@ from typing import Any
 
 import anthropic
 
-from ai_system.core.core.model_router import TaskComplexity, get_core.model_router
-from ai_system.config.settings import settings
+from ai_systems.core.model_router import TaskComplexity, get_model_router
+from ai_systems.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

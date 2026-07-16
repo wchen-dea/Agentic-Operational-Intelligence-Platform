@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ai_system.retrieval.context import SessionMemory
+from ai_systems.retrieval.context import SessionMemory
 
 logger = logging.getLogger(__name__)
 

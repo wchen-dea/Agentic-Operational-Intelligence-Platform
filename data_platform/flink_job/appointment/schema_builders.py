@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.appointment.data_types import get_slot_reservations
+from flink_job.appointment.data_types import get_slot_reservations
 
 
 def consumer_appointment_canonical_schema_builder():

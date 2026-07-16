@@ -11,5 +11,5 @@ select
     after_json,
     source_json,
     ingested_at
-from {{ source('landing', 'inventory_snapshots') }}
+from {{ source('landing', 'article_inventory') }}
 where cdc_op is not null

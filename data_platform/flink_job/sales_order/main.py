@@ -4,8 +4,8 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.sales_order.logging_util import log_message
-from data_platform.flink_jobs.sales_order.schema_builders import (
+from flink_job.sales_order.logging_util import log_message
+from flink_job.sales_order.schema_builders import (
     consumer_sales_order_canonical_schema_builder,
     producer_sales_order_schema_builder,
     producer_so_line_item_schema_builder,
@@ -14,14 +14,14 @@ from data_platform.flink_jobs.sales_order.schema_builders import (
     producer_so_line_item_tax_schema_builder,
     producer_so_line_item_promotion_schema_builder,
 )
-from data_platform.flink_jobs.sales_order.table_functions import (
+from flink_job.sales_order.table_functions import (
     extract_line_items,
     extract_promotions,
     extract_line_item_fees,
     extract_line_item_taxes,
     extract_line_item_promotions,
 )
-from data_platform.flink_jobs.sales_order.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.sales_order.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

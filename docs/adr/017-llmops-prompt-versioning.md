@@ -50,5 +50,5 @@ Four active prompt templates:
 - A/B experiments require sufficient traffic volume to reach statistical significance — low-traffic deployments may not converge within a reasonable time window.
 
 ### Neutral / constraints
-- Prompt registry is seeded at API startup in `services/api/app.py`.
+- Prompt registry is seeded at API startup in `ai_systems/gateway/api/app.py`.
 - `ExperimentManager` significance threshold defaults to `α = 0.05` (95% confidence); configurable.

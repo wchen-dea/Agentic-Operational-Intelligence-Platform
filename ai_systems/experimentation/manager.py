@@ -6,7 +6,7 @@ metrics, and compute statistical significance.
 
 Usage::
 
-    from ai_system.experimentation.manager.manager import get_experiment_manager
+    from ai_systems.experimentation.manager import get_experiment_manager
 
     mgr = get_experiment_manager()
     mgr.create_experiment("kpi_explanation", variants={"default": 80, "concise": 20})

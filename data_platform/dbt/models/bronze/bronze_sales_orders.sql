@@ -5,7 +5,7 @@
         file_format    = 'iceberg',
         unique_key     = 'order_id',
         on_schema_change = 'append_new_columns',
-        partition_by   = {'field': '_ingested_date', 'data_type': 'date'}
+        partition_by   = ['_ingested_date']
     )
 }}
 

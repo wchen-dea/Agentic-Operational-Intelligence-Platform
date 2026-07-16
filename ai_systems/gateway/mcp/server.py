@@ -14,10 +14,10 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from ai_system.tools.fetch_kpi_tool import fetch_store_kpis
-from ai_system.tools.alert_tool import detect_kpi_alerts_for_store
-from ai_system.retrieval.hybrid_search import LocalHybridSearch
-from ai_system.config.settings import settings
+from ai_systems.tools.fetch_kpi_tool import fetch_store_kpis
+from ai_systems.tools.alert_tool import detect_kpi_alerts_for_store
+from ai_systems.retrieval.hybrid_search import LocalHybridSearch
+from ai_systems.config.settings import settings
 from data_platform.semantic_layer import enrich_kpis, _load_kpi_catalog
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ def kpi_catalog_resource() -> str:
 @mcp.resource("config://thresholds")
 def threshold_rules_resource() -> str:
     """Current alert threshold rules with severity and remediation guidance."""
-    from ai_system.tools.alert_tool import load_rules
+    from ai_systems.tools.alert_tool import load_rules
 
     rules = load_rules(settings.alert_rules_path)
     return json.dumps(rules, indent=2)

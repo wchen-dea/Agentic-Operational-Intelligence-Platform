@@ -31,7 +31,7 @@ def producer_reflexis_schema_builder():
         .column("systemStoreIdentifier", DataTypes.INT().not_null())
         .column("systemDepartmentIdentifier", DataTypes.INT().not_null())
         .column("staffGroup", DataTypes.STRING().not_null())
-        .column("weekIndicator", DataTypes.INT().not_null())
+        .column("weekIndicator", DataTypes.INT())
         .column("systemDateIdentifier", DataTypes.INT().not_null())
         .column("createTimestamp", DataTypes.STRING())
         .column("lastModifyTimestamp", DataTypes.STRING())

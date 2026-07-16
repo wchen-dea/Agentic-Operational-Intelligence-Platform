@@ -7,6 +7,7 @@ aoip_spark:
       host: spark-thriftserver
       port: 10000
       user: spark
+      auth: NONE
       schema: bronze
       connect_timeout: 60
       connect_retries: 3
@@ -16,6 +17,7 @@ aoip_spark:
       host: "{{ env_var('SPARK_THRIFT_HOST', 'spark-thriftserver') }}"
       port: "{{ env_var('SPARK_THRIFT_PORT', '10000') | int }}"
       user: "{{ env_var('SPARK_USER', 'spark') }}"
+      auth: "{{ env_var('SPARK_THRIFT_AUTH', 'NONE') }}"
       schema: "{{ env_var('DBT_SCHEMA', 'bronze') }}"
       connect_timeout: 120
       connect_retries: 5

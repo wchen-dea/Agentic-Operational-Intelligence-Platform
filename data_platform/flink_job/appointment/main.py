@@ -4,14 +4,14 @@ from pyflink.table import StreamTableEnvironment
 from pyflink.table.expressions import col
 
 from config import add_jars, get_application_properties, get_property_map, execute
-from data_platform.flink_jobs.appointment.logging_util import log_message
-from data_platform.flink_jobs.appointment.schema_builders import (
+from flink_job.appointment.logging_util import log_message
+from flink_job.appointment.schema_builders import (
     consumer_appointment_canonical_schema_builder,
     producer_appointment_schema_builder,
     producer_slot_reservation_schema_builder,
 )
-from data_platform.flink_jobs.appointment.table_functions import extract_slot_reservations
-from data_platform.flink_jobs.appointment.tables import create_input_kafka_table, create_output_kafka_table
+from flink_job.appointment.table_functions import extract_slot_reservations
+from flink_job.appointment.tables import create_input_kafka_table, create_output_kafka_table
 
 if __name__ == "__main__":
     env = StreamExecutionEnvironment.get_execution_environment()

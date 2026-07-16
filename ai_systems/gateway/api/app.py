@@ -5,15 +5,15 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from ai_system.gateway.api.routes.query import router as query_router
-from ai_system.gateway.api.routes.kpi import router as kpi_router
-from ai_system.gateway.api.routes.alerting import router as alerting_router
-from ai_system.gateway.api.routes.operations import router as operations_router
-from ai_system.gateway.api.routes.skills import router as skills_router
-from ai_system.gateway.api.routes.streaming import router as streaming_router
-from ai_system.gateway.api.auth import init_auth_from_env, require_auth, APIKeyRecord
+from ai_systems.gateway.api.routes.query import router as query_router
+from ai_systems.gateway.api.routes.kpi import router as kpi_router
+from ai_systems.gateway.api.routes.alerts import router as alerts_router
+from ai_systems.gateway.api.routes.operations import router as operations_router
+from ai_systems.gateway.api.routes.skills import router as skills_router
+from ai_systems.gateway.api.routes.streaming import router as streaming_router
+from ai_systems.gateway.api.auth import init_auth_from_env, require_auth, APIKeyRecord
 from observability.logging_config import configure_logging, CorrelationIdMiddleware
-from ai_system.config.settings import settings
+from ai_systems.config.settings import settings
 
 # Configure structured logging before anything else
 configure_logging(
@@ -72,7 +72,7 @@ def health():
 @app.get("/usage", tags=["observability"])
 def usage(auth: APIKeyRecord = Depends(require_auth)):
     """Return LLM token usage and estimated cost for the current process."""
-    from ai_system.core.core.llm import get_session_cost_summary
+    from ai_systems.core.llm import get_session_cost_summary
 
     return get_session_cost_summary()
 

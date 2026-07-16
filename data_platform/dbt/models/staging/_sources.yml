@@ -4,7 +4,6 @@ sources:
   description: >
     Append-only Iceberg tables in MinIO written by Spark Structured Streaming. Each row is a raw Debezium CDC envelope from the Aurora MySQL CDC topics. Schema: iceberg.landing
 
-  database: iceberg
   schema: landing
   loader: spark-structured-streaming
   tables:
@@ -38,12 +37,12 @@ sources:
   - name: appointments
     description: "CDC log for retail_ops.aurora.retail_ops.appointments"
     columns: *cdc_envelope
-  - name: pos_invoices
-    description: "CDC log for retail_ops.aurora.retail_ops.pos_invoices"
+  - name: sales_order_receipts
+    description: "CDC log for retail_ops.aurora.retail_ops.sales_order_receipts"
     columns: *cdc_envelope
   - name: work_orders
     description: "CDC log for retail_ops.aurora.retail_ops.work_orders"
     columns: *cdc_envelope
-  - name: inventory_snapshots
-    description: "CDC log for retail_ops.aurora.retail_ops.inventory_snapshots"
+  - name: article_inventory
+    description: "CDC log for retail_ops.aurora.retail_ops.article_inventory"
     columns: *cdc_envelope

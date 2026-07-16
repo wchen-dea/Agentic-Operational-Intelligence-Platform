@@ -42,5 +42,5 @@ Domains hosted in Aurora MySQL:
 - `GTID_MODE=ON` and `ENFORCE_GTID_CONSISTENCY=ON` are required for Debezium — these must be set at cluster creation time in Aurora.
 
 ### Neutral / constraints
-- MySQL ODS database (`retail_ops_sink`) is populated by Kafka Connect JDBC Sink connectors, not written to directly by the application.
+- MySQL ODS database (`retail_ops`) is populated by Kafka Connect JDBC Sink connectors, not written to directly by the application.
 - Local DDL scripts live in `data_platform/ddl/`; Flyway or Liquibase can manage migrations in production.

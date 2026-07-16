@@ -63,7 +63,7 @@
         "rule-name": "include-inventory-snapshots",
         "object-locator": {
           "schema-name": "retail_ops",
-          "table-name": "inventory_snapshots"
+          "table-name": "article_inventory"
         },
         "rule-action": "include"
       },

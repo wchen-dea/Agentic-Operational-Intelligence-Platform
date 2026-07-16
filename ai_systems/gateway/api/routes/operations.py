@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from ai_system.gateway.api.models import OperationalBriefRequest
-from ai_system.gateway.api.auth import require_auth, APIKeyRecord
-from ai_system.orchestration.orchestrator import Orchestrator, get_orchestrator
+from ai_systems.gateway.api.models import OperationalBriefRequest
+from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
+from ai_systems.orchestration.orchestrator import Orchestrator, get_orchestrator
 
 router = APIRouter(tags=["operations"])
 

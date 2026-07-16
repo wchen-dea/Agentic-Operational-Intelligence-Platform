@@ -1,5 +1,5 @@
 from pyflink.table import Schema, DataTypes
-from data_platform.flink_jobs.vehicle_inspection.data_types import get_tire_inspection_details
+from flink_job.vehicle_inspection.data_types import get_tire_inspection_details
 
 
 def consumer_vtv_canonical_schema_builder():

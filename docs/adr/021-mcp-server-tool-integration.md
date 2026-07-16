@@ -10,7 +10,7 @@ Beyond the REST API, the platform should be usable by external AI systems and de
 
 ## Decision
 
-Implement an **MCP server** (`services/mcp_server.py`) using the `mcp` Python SDK (version 1.10+). The server exposes:
+Implement an **MCP server** (`ai_systems/gateway/mcp/server.py`) using the `mcp` Python SDK (version 1.10+). The server exposes:
 
 **5 tools:**
 | Tool | Description |

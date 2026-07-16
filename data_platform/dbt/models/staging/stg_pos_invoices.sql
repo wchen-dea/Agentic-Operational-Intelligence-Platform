@@ -11,5 +11,5 @@ select
     after_json,
     source_json,
     ingested_at
-from {{ source('landing', 'pos_invoices') }}
+from {{ source('landing', 'sales_order_receipts') }}
 where cdc_op is not null

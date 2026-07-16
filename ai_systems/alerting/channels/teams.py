@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from ai_system.config.settings import settings
+from ai_systems.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
