@@ -44,5 +44,5 @@ The Kafka Connect cluster runs on port 8083 in both local Docker and MSK Connect
 - The Confluent JDBC Sink plugin must be pre-installed in the Kafka Connect image (`confluent-hub install confluentinc/kafka-connect-jdbc`).
 
 ### Neutral / constraints
-- Connector configs are built programmatically in `register_connectors.py` — adding a new table requires one new entry in that script, not a new JSON file.
+- Connector configs are built programmatically in `container/scripts/register_connectors.py` — adding a new table requires one new entry in that script, not a new JSON file.
 - Local Kafka Connect uses the same plugin as MSK Connect; configs are environment-variable-parameterized for portability.

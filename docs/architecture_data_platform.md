@@ -114,11 +114,11 @@ Avro schemas: `data_platform/schema/*.avsc` · registered in Schema Registry at 
 | kronos_hours | `CanonicalKronosHours` | `SinkKronosHours` |
 | site | `CanonicalKronosSite` | `SinkSite`, `SinkRegion`, `SinkSiteBusinessUnit` |
 
-Submission: `data_platform/flink_job/start_flink_job.sh <name>` or `start_flink_job_all.py`
+Submission: `data_platform/flink_job/start_flink_job.sh <name>` or `data_platform/flink_job/start_flink_job_all.py`
 
 ### Stage 3 — Kafka Connect JDBC Sink
 
-One JDBC Sink connector per PDM table. The `ChangeCase` SMT converts Avro camelCase field names to MySQL snake_case. `register_connectors.py` builds connector configs programmatically and POSTs them to the Kafka Connect REST API.
+One JDBC Sink connector per PDM table. The `ChangeCase` SMT converts Avro camelCase field names to MySQL snake_case. `container/scripts/register_connectors.py` builds connector configs programmatically and POSTs them to the Kafka Connect REST API.
 
 MySQL ODS database: `retail_ops` · user: `connect_user` · DDL: `data_platform/ddl/`
 
@@ -138,7 +138,7 @@ Envelope: `{ "before": {...}, "after": {...}, "op": "c|u|d|r", "ts_ms": 123 }`
 
 ### Stage 5 — Spark Streaming → MinIO Landing (Iceberg)
 
-`cdc_to_landing.py` subscribes to all CDC topics and appends the full Debezium envelope as rows to Iceberg landing tables. Key properties:
+`data_platform/spark/cdc_to_landing.py` subscribes to all CDC topics and appends the full Debezium envelope as rows to Iceberg landing tables. Key properties:
 
 - Materialization: **append-only** — full CDC history preserved
 - Checkpoint: `s3a://checkpoints/cdc/<table>`

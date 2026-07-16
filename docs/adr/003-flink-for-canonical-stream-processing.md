@@ -10,14 +10,14 @@ The platform needs to transform 15 canonical Avro topics (one per operational so
 
 ## Decision
 
-Use **Apache Flink 2.2.0** with the **PyFlink Table API** for all canonical → PDM Sink topic transformations. Each of the 14 transformations is a self-contained Python module under `data_platform/flink_job/<domain>/`, with an entry point at `main.py`.
+Use **Apache Flink 2.2.0** with the **PyFlink Table API** for all canonical → PDM Sink topic transformations. Each of the 14 transformations is a self-contained Python module under `data_platform/flink_job/<domain>/`, with an entry point at `data_platform/flink_job/<domain>/main.py`.
 
 Architecture:
 - **Flink standalone cluster** (one JobManager, one TaskManager with 14 task slots) runs locally via Docker Compose; AWS Managed Flink (KDA) in production.
 - Each job reads from a canonical Avro topic via `avro-confluent` source table and writes to one or more `Sink*` topics via `avro-confluent` or JSON sink tables.
-- Jobs are submitted via `data_platform/flink_job/start_flink_job.sh <name>` or `start_flink_job_all.py`.
+- Jobs are submitted via `data_platform/flink_job/start_flink_job.sh <name>` or `data_platform/flink_job/start_flink_job_all.py`.
 - The connector fat JAR (`kda-dependencies-2.2.0.jar`) is built from `container/flink/pom.xml` and pre-loaded into `/opt/flink/lib/` in the Docker image.
-- Job configuration (bootstrap servers, schema registry URL, topic names) is read from `application_properties_docker.json` / `application_properties_local.json`.
+- Job configuration (bootstrap servers, schema registry URL, topic names) is read from per-domain files at `data_platform/flink_job/<domain>/application_properties_docker.json` / `data_platform/flink_job/<domain>/application_properties_local.json`.
 
 ## Alternatives considered
 
@@ -35,7 +35,7 @@ Architecture:
 - Flink provides exactly-once delivery semantics with Kafka offsets stored as checkpoints.
 - PyFlink Table API enables SQL-like transformations without Java, keeping the team in a single language.
 - The Flink Web Dashboard (:8082) shows running jobs, task graphs, checkpoints, and backpressure.
-- Each job is independently deployable — adding a new domain requires one new `main.py` with no changes to existing jobs.
+- Each job is independently deployable — adding a new domain requires one new `data_platform/flink_job/<domain>/main.py` with no changes to existing jobs.
 - Flink's built-in parallelism handles burst loads without manual scaling.
 
 ### Negative / trade-offs

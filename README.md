@@ -100,23 +100,18 @@ make test           # run test suite
 ```text
 ai_systems/
   agents/            KPI, anomaly, promotion, recommendation agents
+  alerting/          Alert engine, channels, and KPI threshold rules
+  config/            Runtime settings (Aurora MySQL, CDC, LLM, Redis)
+  core/              LLM client, guardrails, model router, prompt registry, typed outputs
+  experimentation/   A/B prompt experimentation manager
+  gateway/
+    api/             FastAPI (routes: query, kpi, alerts, operations, skills, streaming, health)
+    mcp/server.py    MCP server entrypoint
+    scheduler/       Daily summary job
   orchestration/     DAG engine, intent router, executor with retry/fallback
-  skills/            Skill ABC, built-in skill catalog, singleton registry
-  rag/               ChromaDB + TF-IDF hybrid search retriever
-  memory/            Persistent SQLite-backed session memory
-  context.py         Hybrid context assembler (streaming + vector + memory)
-  experimentation.py A/B prompt experimentation with significance testing
-  guardrails.py      Prompt injection detection, PII scrubbing, output validation
-  llm.py             Anthropic Claude client (sync/async/stream/vision/tools)
-  model_router.py    Multi-model routing (Haiku/Sonnet/Opus) with fallback
-  prompts.py         Versioned prompt registry with lifecycle management
-  structured_output.py  Pydantic-validated LLM response models
-  tool_calling.py    Agentic tool-calling loop
-config/              Runtime settings (Aurora MySQL, CDC, LLM, Redis)
-ai_systems/gateway/
-  api/               FastAPI (routes: query, kpi, alerts, operations, skills, streaming, health)
-  mcp/server.py      MCP server entrypoint
-  scheduler/         Daily summary job
+  retrieval/         Hybrid context assembler, semantic search, session memory
+  skills.py          Skill ABC and shared skill contracts
+  tools/             Alert/KPI tools, registry, and tool-calling helpers
 data_platform/
   kpi_catalog.yaml   Machine-readable KPI definitions (16 KPIs)
   kpi_store.py       SQLite-backed KPI data store
@@ -139,10 +134,9 @@ data_platform/
   flink_job/         14 PyFlink jobs (canonical → PDM sink topics)
     start_flink_job.sh        submit one pipeline
     start_flink_job_all.py    submit all 14
-alerts/              Alert engine, threshold config, MS Teams dispatch
 observability/       Metrics, LLM evaluator, agent performance tracker
 tests/               Unit tests (agents, orchestration, API, data, AI gaps)
-docs/                Runbook + 12 ADRs + architecture diagram
+docs/                Runbook + 22 ADRs + architecture references
 Makefile             All dev workflows — run `make help`
 container/
   docker-compose.yaml  Full local stack (~30 services)

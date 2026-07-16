@@ -44,4 +44,4 @@ Configuration:
 
 ### Neutral / constraints
 - The Debezium plugin is pre-installed in the Kafka Connect Docker image (`debezium/debezium-connector-mysql`).
-- CDC topics are consumed only by Spark Structured Streaming (`cdc_to_landing.py`); the AI real-time path reads MySQL ODS directly, not the CDC topics.
+- CDC topics are consumed only by Spark Structured Streaming (`data_platform/spark/cdc_to_landing.py`); the AI real-time path reads MySQL ODS directly, not the CDC topics.

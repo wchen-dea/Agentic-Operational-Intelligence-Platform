@@ -221,7 +221,7 @@ spec:
 | Redis (docker) | Amazon ElastiCache Redis | Update `AOIP_REDIS__URL` |
 | SQLite session memory | Amazon DynamoDB | Swap `PersistentSessionMemory` backend |
 | Qdrant (docker) | Amazon OpenSearch with k-NN plugin | Update `QDRANT_HOST` |
-| Feast (docker) | Amazon SageMaker Feature Store | Update Feast provider in `feature_store.yaml` |
+| Feast (docker) | Amazon SageMaker Feature Store | Update Feast provider in `data_platform/feature_store/feature_store.yaml` |
 | ChromaDB (in-process) | Amazon OpenSearch / pgvector | Update hybrid search config |
 
 ## Architecture decision records relevant to deployment

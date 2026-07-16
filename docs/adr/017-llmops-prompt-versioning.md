@@ -10,7 +10,7 @@ LLM prompt quality directly determines output relevance and persona fit. As the 
 
 ## Decision
 
-Centralize all prompts in a versioned **`PromptRegistry`** (`ai_systems/prompts.py`) with lifecycle states:
+Centralize all prompts in a versioned **`PromptRegistry`** (`ai_systems/core/prompts.py`) with lifecycle states:
 
 ```
 draft → active → deprecated → retired
@@ -18,7 +18,7 @@ draft → active → deprecated → retired
 
 Each prompt entry carries: `name`, `version` (semantic), `text`, `status`, `metadata`, and `variants` (for A/B).
 
-**`ExperimentManager`** (`ai_systems/experimentation.py`) provides:
+**`ExperimentManager`** (`ai_systems/experimentation/manager.py`) provides:
 - Deterministic traffic splitting by session ID (SHA-256 mod N) — consistent experience within a session.
 - Per-variant metric collection (`mean_score`, `impressions_total`).
 - Welch's t-test significance testing at configurable α-level.

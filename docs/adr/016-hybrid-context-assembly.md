@@ -10,11 +10,11 @@ LLM quality degrades when the model lacks relevant context. The platform has thr
 
 ## Decision
 
-Implement a **`HybridContextAssembler`** (`ai_systems/context.py`) that merges three sources into a single `ContextWindow` object consumed by all agents:
+Implement a **`HybridContextAssembler`** (`ai_systems/retrieval/context.py`) that merges three sources into a single `ContextWindow` object consumed by all agents:
 
 1. **`StreamingStateStore`** (in-process TTL cache, or `RedisStreamingStateStore` for production) — holds real-time KPI snapshots and CDC event summaries. TTL: 300 s default.
 
-2. **`LocalHybridSearch`** (`ai_systems/rag/retrieval/hybrid_search.py`) — combines:
+2. **`LocalHybridSearch`** (`ai_systems/retrieval/hybrid_search.py`) — combines:
    - ChromaDB vector search (semantic similarity, 384-dim embeddings).
    - TF-IDF keyword search (exact term recall).
    - **Reciprocal Rank Fusion (RRF)** to merge results without tuning score thresholds.

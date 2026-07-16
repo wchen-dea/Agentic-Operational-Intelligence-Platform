@@ -93,7 +93,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph "ai_systems/llm.py"
+    subgraph "ai_systems/core/llm.py"
         GEN[generate\nSync + Cache]
         TOOLS[generate_with_tools\nMulti-turn Tool Loop]
         STREAM[generate_stream\nSSE Async Generator]
@@ -120,19 +120,19 @@ flowchart LR
 
 | Component | Source |
 |-----------|--------|
-| LLM client | `ai_systems/llm.py` |
-| Model router | `ai_systems/model_router.py` |
-| Guardrails | `ai_systems/guardrails.py` |
-| Structured output | `ai_systems/structured_output.py` |
-| Tool-calling loop | `ai_systems/tool_calling.py` |
+| LLM client | `ai_systems/core/llm.py` |
+| Model router | `ai_systems/core/model_router.py` |
+| Guardrails | `ai_systems/core/guardrails.py` |
+| Structured output | `ai_systems/core/structured_output.py` |
+| Tool-calling loop | `ai_systems/tools/calling.py` |
 | DAG orchestration | `ai_systems/orchestration/dag.py` |
 | Intent router | `ai_systems/orchestration/router.py` |
 | DAG executor | `ai_systems/orchestration/executor.py` |
-| Skill registry | `ai_systems/skills/` |
-| Hybrid context | `ai_systems/context.py` |
-| Session memory | `ai_systems/memory/persistent_memory.py` |
-| A/B experiments | `ai_systems/experimentation.py` |
-| Prompt registry | `ai_systems/prompts.py` |
+| Skill registry | `ai_systems/skills.py` + `ai_systems/tools/registry.py` |
+| Hybrid context | `ai_systems/retrieval/context.py` |
+| Session memory | `ai_systems/retrieval/memory.py` |
+| A/B experiments | `ai_systems/experimentation/manager.py` |
+| Prompt registry | `ai_systems/core/prompts.py` |
 | Observability | `observability/evaluation.py` |
 | Auth + RBAC | `ai_systems/gateway/api/auth.py` |
 | MCP server | `ai_systems/gateway/mcp/server.py` |
@@ -143,5 +143,5 @@ flowchart LR
 | Vector indexer | `data_platform/vector_index/indexer.py` |
 | Flink jobs | `data_platform/flink_job/` |
 | dbt models | `data_platform/dbt/models/` |
-| CDC task spec | `config/cdc/aws_dms_aurora_to_msk_task.example.json` |
+| CDC task spec | `ai_systems/config/cdc/aws_dms_aurora_to_msk_task.example.json` |
 

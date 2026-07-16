@@ -44,5 +44,5 @@ For production: replace the REST catalog with AWS Glue Catalog (`GlueCatalog`), 
 - `expire_snapshots` must be run regularly on bronze tables to prevent unbounded metadata growth.
 
 ### Neutral / constraints
-- All dbt models use `file_format: iceberg` configured globally in `dbt_project.yml`.
+- All dbt models use `file_format: iceberg` configured globally in `data_platform/dbt/dbt_project.yml`.
 - The Iceberg REST catalog listens on port 8181 locally; all Spark and dbt connections point to `http://iceberg-rest:8181`.

@@ -59,4 +59,4 @@ Typical source tables: `iceberg.silver.silver_work_orders`
 
 ## Alert thresholds
 
-All KPIs have configurable alert thresholds in `alerts/rules/kpi_thresholds.yaml`. Each rule includes severity, direction, description, unit, and remediation guidance. The alert engine (`alerts/engine.py`) evaluates gold-layer KPIs against these rules.
+All KPIs have configurable alert thresholds in `ai_systems/alerting/rules/kpi_thresholds.yaml`. Each rule includes severity, direction, description, unit, and remediation guidance. The alert engine (`ai_systems/alerting/engine.py`) evaluates gold-layer KPIs against these rules.

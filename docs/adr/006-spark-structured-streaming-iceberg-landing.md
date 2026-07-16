@@ -45,5 +45,5 @@ Key decisions:
 - The `tabulario/spark-iceberg` image is ~4 GB — slow to pull on first use.
 
 ### Neutral / constraints
-- `cdc_to_landing.py` creates the `iceberg.landing` namespace and tables if they don't exist on first run.
+- `data_platform/spark/cdc_to_landing.py` creates the `iceberg.landing` namespace and tables if they don't exist on first run.
 - Kafka bootstrap servers, Iceberg REST URL, and MinIO credentials are injected via environment variables — no hard-coded values.

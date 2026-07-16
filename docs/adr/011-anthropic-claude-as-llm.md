@@ -10,16 +10,16 @@ The AI layer needs an LLM to generate natural-language operational briefs, class
 
 ## Decision
 
-Use **Anthropic Claude** (via the `anthropic` Python SDK) as the primary LLM provider. Default model: `claude-sonnet-4-20250514`, configurable in `config/settings.py` via `AOIP_LLM__MODEL`.
+Use **Anthropic Claude** (via the `anthropic` Python SDK) as the primary LLM provider. Default model: `claude-sonnet-4-20250514`, configurable in `ai_systems/config/settings.py` via `AOIP_LLM__MODEL`.
 
-The `ai_systems/llm.py` module implements five interaction modes:
+The `ai_systems/core/llm.py` module implements five interaction modes:
 - **`generate()`** — synchronous text generation with SHA-256 LRU cache (128 entries).
 - **`generate_with_tools()`** — multi-turn tool-calling loop (up to 5 rounds) wiring agent skills into Claude's `tools` parameter.
 - **`generate_stream()`** — async SSE streaming via `client.messages.stream()`.
 - **`generate_async()`** — non-blocking async generation via `AsyncAnthropic`.
 - **`generate_with_image()`** — multimodal vision input (PNG, JPEG, GIF, WebP).
 
-**Model routing** (`ai_systems/model_router.py`) selects the optimal model by task complexity:
+**Model routing** (`ai_systems/core/model_router.py`) selects the optimal model by task complexity:
 - **Haiku** — intent classification, simple lookups (lowest latency, lowest cost).
 - **Sonnet** — operational briefs, recommendation generation (balanced).
 - **Opus** — complex multi-step reasoning, edge cases (highest capability).
@@ -36,7 +36,7 @@ The `ai_systems/llm.py` module implements five interaction modes:
 ## Consequences
 
 ### Positive
-- Vendor lock-in is minimal — `ai_systems/llm.py` abstracts all calls; swapping to another provider requires changing only that file and `config/settings.py`.
+- Vendor lock-in is minimal — `ai_systems/core/llm.py` abstracts all calls; swapping to another provider requires changing only that file and `ai_systems/config/settings.py`.
 - Graceful degradation: without `ANTHROPIC_API_KEY`, the platform returns structured template output instead of failing.
 - Response caching avoids redundant API calls for identical prompts (~30–50% cost reduction in repeated queries).
 - Model routing reduces costs by ~60% for classification tasks (Haiku vs. Sonnet).
@@ -49,4 +49,4 @@ The `ai_systems/llm.py` module implements five interaction modes:
 
 ### Neutral / constraints
 - Token costs are tracked per-session via `LLMUsage` dataclass and exposed at `GET /usage`.
-- The `LLMSettings` in `config/settings.py` exposes `provider`, `model`, `max_tokens`, `temperature`, and `api_key_env_var` — all overridable without code changes.
+- The `LLMSettings` in `ai_systems/config/settings.py` exposes `provider`, `model`, `max_tokens`, `temperature`, and `api_key_env_var` — all overridable without code changes.

@@ -42,7 +42,7 @@ Schema naming is controlled by `generate_schema_name.sql` — custom schemas map
 - Column lineage is queryable via `dbt docs generate` — every bronze/silver column traces back to a landing source field.
 - `--select bronze` / `--select silver` runs individual layers independently for debugging.
 - dbt incremental models skip already-processed records — silver runs complete in seconds for small deltas.
-- The `dbt_project.yml` global `+file_format: iceberg` applies Iceberg to all models without per-model config.
+- The `data_platform/dbt/dbt_project.yml` global `+file_format: iceberg` applies Iceberg to all models without per-model config.
 
 ### Negative / trade-offs
 - `dbt-spark[PyHive]` requires `libsasl2-dev` system library — this is pre-installed in the Airflow Docker image.
@@ -50,5 +50,5 @@ Schema naming is controlled by `generate_schema_name.sql` — custom schemas map
 - dbt does not support native Iceberg `DELETE` — hard deletes in silver require the `delete_cdc_rows` post-hook macro.
 
 ### Neutral / constraints
-- `profiles.yml` lives in `data_platform/dbt/` and is bind-mounted into the Airflow container at `/opt/airflow/dbt`.
+- `data_platform/dbt/profiles.yml` is bind-mounted into the Airflow container at `/opt/airflow/dbt`.
 - `dbt deps` must be run at least once to install `dbt-labs/dbt_utils` before any model runs.

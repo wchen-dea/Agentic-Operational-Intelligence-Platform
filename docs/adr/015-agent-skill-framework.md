@@ -10,7 +10,7 @@ Agent capabilities (fetch KPIs, detect anomalies, search knowledge, generate nar
 
 ## Decision
 
-Implement a `Skill` abstract base class (`ai_systems/skills/`) with a `SkillRegistry` singleton that:
+Implement a `Skill` abstract base class (`ai_systems/skills.py`) plus a tool catalog/registry (`ai_systems/tools/`) with a singleton `SkillRegistry` pattern that:
 
 - Exposes each skill via `invoke(name, **kwargs)` — uniform invocation interface.
 - Exports all skills as LLM function-calling definitions via `to_tool_schemas()`.
@@ -22,7 +22,7 @@ Five built-in skills:
 | Skill | Description | Tags |
 |-------|-------------|------|
 | `fetch_kpis` | Retrieves KPI metrics from MySQL ODS or SQLite | kpi, data, read |
-| `detect_anomalies` | Evaluates KPIs against threshold rules in `kpi_thresholds.yaml` | anomaly, alerts |
+| `detect_anomalies` | Evaluates KPIs against threshold rules in `ai_systems/alerting/rules/kpi_thresholds.yaml` | anomaly, alerts |
 | `semantic_search` | Hybrid ChromaDB + TF-IDF RRF search over the knowledge corpus | rag, search |
 | `diagnose_signals` | Correlates KPI anomalies with operational events | diagnosis, analysis |
 | `generate_narrative` | Produces persona-aware natural-language summaries | llm, generation |

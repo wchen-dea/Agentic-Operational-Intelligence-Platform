@@ -311,7 +311,7 @@ make conduktor-restart  # restart the container (clears frozen HTTP thread pool)
 
 ## Deployment Notes
 
-- Configure `config/settings.py` with real Aurora MySQL and MSK endpoints.
+- Configure `ai_systems/config/settings.py` with real Aurora MySQL and MSK endpoints.
 - Use AWS Secrets Manager for credentials (referenced by `password_secret_name` in settings).
 - Replace MinIO with AWS S3; replace Iceberg REST catalog with AWS Glue Catalog or Nessie.
 - Replace `StreamingStateStore` with Redis or a Kafka consumer for real-time state.
