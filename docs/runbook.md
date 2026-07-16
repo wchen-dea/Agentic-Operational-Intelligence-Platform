@@ -6,14 +6,30 @@
 - [uv](https://docs.astral.sh/uv/) installed
 - Docker Desktop (≥ 8 GB RAM allocated recommended)
 - Maven 3.x (`brew install maven`) — for building the Flink connector JAR
-- `ANTHROPIC_API_KEY` in `.env` for LLM-enhanced output
+- LLM provider configuration in `.env`:
+  - Local dev (Ollama): `AOIP_LLM__PROVIDER=ollama`
+  - Production (Anthropic): `AOIP_LLM__PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...`
 
 ## First-time setup
 
 ```bash
 make install        # create .venv and install all dependency groups
-make env            # create .env — add ANTHROPIC_API_KEY
+make env            # create .env
 make flink-jar      # build the Kafka + Avro fat JAR (Maven, ~40 MB, one-time)
+```
+
+Example `.env` snippets:
+
+```bash
+# Local development (Ollama)
+AOIP_LLM__PROVIDER=ollama
+AOIP_LLM__MODEL=llama3.1:8b
+AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
+
+# Production (Anthropic)
+AOIP_LLM__PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-key
+AOIP_LLM__MODEL=claude-sonnet-4-20250514
 ```
 
 ## Start the full platform

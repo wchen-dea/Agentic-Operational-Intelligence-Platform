@@ -90,7 +90,9 @@ The platform is composed of eight sequential, independently deployable pipeline 
 
 ```bash
 make install        # create .venv and install all dependency groups
-make env            # create .env — add ANTHROPIC_API_KEY
+make env            # create .env
+# local Ollama: AOIP_LLM__PROVIDER=ollama, AOIP_LLM__MODEL=llama3.1:8b
+# production Anthropic: AOIP_LLM__PROVIDER=anthropic, ANTHROPIC_API_KEY=...
 make up             # start all infrastructure services
 make produce        # start synthetic Kafka producer (15 canonical topics)
 make test           # run test suite

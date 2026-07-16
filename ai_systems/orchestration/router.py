@@ -189,7 +189,7 @@ class IntentRouter:
         """Call Haiku for a structured intent classification. Returns None on any failure."""
         from ai_systems.config.settings import settings
 
-        if not os.environ.get(settings.llm.api_key_env_var):
+        if settings.llm.provider.strip().lower() == "anthropic" and not os.environ.get(settings.llm.api_key_env_var):
             return None
 
         try:

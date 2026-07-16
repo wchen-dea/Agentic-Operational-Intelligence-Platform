@@ -42,11 +42,16 @@ class LakehouseSettings(BaseModel):
 
 
 class LLMSettings(BaseModel):
+    # Supported providers: "anthropic" (default), "ollama" (local dev)
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
     max_tokens: int = 1024
     temperature: float = 0.3
+    # Used when provider == "anthropic"
     api_key_env_var: str = "ANTHROPIC_API_KEY"
+    # Used when provider == "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_timeout_seconds: float = 120.0
 
 
 class RedisSettings(BaseModel):

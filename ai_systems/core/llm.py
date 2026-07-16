@@ -11,6 +11,7 @@ from functools import lru_cache
 from typing import Any
 
 import anthropic
+import httpx
 
 from ai_systems.core.model_router import TaskComplexity, get_model_router
 from ai_systems.config.settings import settings
@@ -140,6 +141,45 @@ def _extract_usage(response: Any) -> tuple[int, int]:
     return getattr(usage, "input_tokens", 0), getattr(usage, "output_tokens", 0)
 
 
+def _is_ollama_provider() -> bool:
+    return settings.llm.provider.strip().lower() == "ollama"
+
+
+def _ollama_chat_sync(
+    prompt: str,
+    system: str | None,
+    max_tokens: int,
+) -> tuple[str, int, int]:
+    messages: list[dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "model": settings.llm.model,
+        "messages": messages,
+        "stream": False,
+        "options": {
+            "temperature": settings.llm.temperature,
+            "num_predict": max_tokens,
+        },
+    }
+
+    url = f"{settings.llm.ollama_base_url.rstrip('/')}/api/chat"
+    with httpx.Client(timeout=settings.llm.ollama_timeout_seconds) as client:
+        response = client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+
+    text = ((data.get("message") or {}).get("content") or "").strip()
+    if not text:
+        raise RuntimeError("Ollama response contained no text content.")
+
+    input_tokens = int(data.get("prompt_eval_count") or 0)
+    output_tokens = int(data.get("eval_count") or 0)
+    return text, input_tokens, output_tokens
+
+
 def generate(
     prompt: str,
     system: str | None = None,
@@ -161,8 +201,14 @@ def generate(
         task_hint: Natural language description used to infer complexity when
             ``complexity`` is not supplied explicitly.
     """
+    use_ollama = _is_ollama_provider()
     router = get_model_router()
-    if complexity is not None or task_hint is not None:
+    if use_ollama:
+        model_id = f"ollama:{settings.llm.model}"
+        cost_in = 0.0
+        cost_out = 0.0
+        effective_max_tokens = max_tokens or settings.llm.max_tokens
+    elif complexity is not None or task_hint is not None:
         spec = router.select(complexity=complexity, task_hint=task_hint)
         model_id = spec.model_id
         cost_in = spec.cost_input_per_m
@@ -193,25 +239,32 @@ def generate(
             logger.debug("LLM cache hit (saved ~%d tokens)", original_usage.total_tokens)
             return text
 
-    client = _get_client()
-    kwargs: dict[str, Any] = {
-        "model": model_id,
-        "max_tokens": effective_max_tokens,
-        "temperature": settings.llm.temperature,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    if system:
-        kwargs["system"] = system
-
     start = time.perf_counter()
     try:
-        response = client.messages.create(**kwargs)
-        duration = (time.perf_counter() - start) * 1000
-        text = _extract_text(response)
-        if not text:
-            raise RuntimeError("LLM response contained no text content.")
+        if use_ollama:
+            text, input_tokens, output_tokens = _ollama_chat_sync(
+                prompt=prompt,
+                system=system,
+                max_tokens=effective_max_tokens,
+            )
+        else:
+            client = _get_client()
+            kwargs: dict[str, Any] = {
+                "model": model_id,
+                "max_tokens": effective_max_tokens,
+                "temperature": settings.llm.temperature,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if system:
+                kwargs["system"] = system
 
-        input_tokens, output_tokens = _extract_usage(response)
+            response = client.messages.create(**kwargs)
+            text = _extract_text(response)
+            if not text:
+                raise RuntimeError("LLM response contained no text content.")
+            input_tokens, output_tokens = _extract_usage(response)
+
+        duration = (time.perf_counter() - start) * 1000
         usage = LLMUsage(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -223,7 +276,6 @@ def generate(
         )
         _session_usage.append(usage)
 
-        # Store in cache
         if use_cache:
             _response_cache.put(key, (text, usage))  # type: ignore[possibly-undefined]
 
@@ -244,6 +296,9 @@ def generate(
         raise
     except anthropic.APIStatusError as exc:
         logger.error("LLM API error (status=%d): %s", exc.status_code, exc.message)
+        raise
+    except httpx.HTTPError as exc:
+        logger.error("Ollama HTTP error: %s", exc)
         raise
 
 
@@ -285,6 +340,9 @@ def generate_with_image(
         )
     """
     import base64
+
+    if _is_ollama_provider():
+        raise NotImplementedError("generate_with_image currently supports the anthropic provider only")
 
     if media_type not in _SUPPORTED_IMAGE_TYPES:
         raise ValueError(f"Unsupported image type '{media_type}'. Supported: {_SUPPORTED_IMAGE_TYPES}")
@@ -379,6 +437,20 @@ def generate_with_tools(
     Returns a dict with ``text`` (final answer), ``tool_calls`` (list of
     calls made), and ``usage`` (LLMUsage).
     """
+    if _is_ollama_provider():
+        logger.warning("Ollama provider selected: native tool-calling loop disabled; returning plain generation")
+        text = generate(
+            prompt=prompt,
+            system=system,
+            max_tokens=max_tokens,
+            use_cache=False,
+        )
+        return {
+            "text": text,
+            "tool_calls": [],
+            "usage": _session_usage[-1] if _session_usage else None,
+        }
+
     effective_max_tokens = max_tokens or settings.llm.max_tokens
 
     client = _get_client()
@@ -495,6 +567,57 @@ async def generate_stream(
             print(chunk, end="")
     """
     effective_max_tokens = max_tokens or settings.llm.max_tokens
+    start = time.perf_counter()
+
+    if _is_ollama_provider():
+        url = f"{settings.llm.ollama_base_url.rstrip('/')}/api/chat"
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        payload = {
+            "model": settings.llm.model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": settings.llm.temperature,
+                "num_predict": effective_max_tokens,
+            },
+        }
+
+        input_tokens = 0
+        output_tokens = 0
+        try:
+            async with httpx.AsyncClient(timeout=settings.llm.ollama_timeout_seconds) as client:
+                async with client.stream("POST", url, json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        text = ((chunk.get("message") or {}).get("content") or "")
+                        if text:
+                            yield text
+                        if chunk.get("done"):
+                            input_tokens = int(chunk.get("prompt_eval_count") or 0)
+                            output_tokens = int(chunk.get("eval_count") or 0)
+
+            duration = (time.perf_counter() - start) * 1000
+            usage = LLMUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_hit=False,
+                duration_ms=duration,
+                model_id=f"ollama:{settings.llm.model}",
+                cost_input_per_m=0.0,
+                cost_output_per_m=0.0,
+            )
+            _session_usage.append(usage)
+            return
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            logger.error("Ollama stream error: %s", exc)
+            raise
+
     client = _get_async_client()
 
     kwargs: dict[str, Any] = {
@@ -506,7 +629,6 @@ async def generate_stream(
     if system:
         kwargs["system"] = system
 
-    start = time.perf_counter()
     total_output = 0
 
     try:
@@ -544,6 +666,52 @@ async def generate_async(
 ) -> str:
     """Async (non-streaming) LLM generation using the AsyncAnthropic client."""
     effective_max_tokens = max_tokens or settings.llm.max_tokens
+    start = time.perf_counter()
+
+    if _is_ollama_provider():
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        payload = {
+            "model": settings.llm.model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": settings.llm.temperature,
+                "num_predict": effective_max_tokens,
+            },
+        }
+        url = f"{settings.llm.ollama_base_url.rstrip('/')}/api/chat"
+
+        try:
+            async with httpx.AsyncClient(timeout=settings.llm.ollama_timeout_seconds) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+
+            text = ((data.get("message") or {}).get("content") or "").strip()
+            if not text:
+                raise RuntimeError("Ollama async response contained no text content.")
+
+            inp = int(data.get("prompt_eval_count") or 0)
+            out = int(data.get("eval_count") or 0)
+            duration = (time.perf_counter() - start) * 1000
+            usage = LLMUsage(
+                input_tokens=inp,
+                output_tokens=out,
+                cache_hit=False,
+                duration_ms=duration,
+                model_id=f"ollama:{settings.llm.model}",
+                cost_input_per_m=0.0,
+                cost_output_per_m=0.0,
+            )
+            _session_usage.append(usage)
+            return text
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            logger.error("Ollama async error: %s", exc)
+            raise
+
     client = _get_async_client()
 
     kwargs: dict[str, Any] = {
@@ -555,7 +723,6 @@ async def generate_async(
     if system:
         kwargs["system"] = system
 
-    start = time.perf_counter()
     try:
         response = await client.messages.create(**kwargs)
         duration = (time.perf_counter() - start) * 1000
