@@ -6,6 +6,7 @@
 - [uv](https://docs.astral.sh/uv/) installed
 - Docker Desktop (≥ 8 GB RAM allocated recommended)
 - Maven 3.x (`brew install maven`) — for building the Flink connector JAR
+- [Ollama](https://ollama.com/) installed (local LLM development only)
 - LLM provider configuration in `.env`:
   - Local dev (Ollama): `AOIP_LLM__PROVIDER=ollama`
   - Production (Anthropic): `AOIP_LLM__PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...`
@@ -25,12 +26,45 @@ Example `.env` snippets:
 AOIP_LLM__PROVIDER=ollama
 AOIP_LLM__MODEL=llama3.1:8b
 AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
+AOIP_LLM__OLLAMA_TIMEOUT_SECONDS=120
 
 # Production (Anthropic)
 AOIP_LLM__PROVIDER=anthropic
 ANTHROPIC_API_KEY=your-key
 AOIP_LLM__MODEL=claude-sonnet-4-20250514
 ```
+
+## LLM provider profiles
+
+### Local development profile (Ollama)
+
+```bash
+AOIP_LLM__PROVIDER=ollama
+AOIP_LLM__MODEL=llama3.2:latest
+AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
+AOIP_LLM__OLLAMA_TIMEOUT_SECONDS=120
+```
+
+Start/check Ollama:
+
+```bash
+ollama serve
+curl --noproxy '*' http://localhost:11434/api/tags
+```
+
+### Production profile (Anthropic)
+
+```bash
+AOIP_LLM__PROVIDER=anthropic
+AOIP_LLM__MODEL=claude-sonnet-4-20250514
+ANTHROPIC_API_KEY=<secret>
+```
+
+Notes:
+
+- Ollama supports sync, async, and streaming generation in this project.
+- Tool-calling falls back to plain generation when provider is Ollama.
+- Image generation is Anthropic-only in the current implementation.
 
 ## Start the full platform
 
@@ -237,7 +271,11 @@ make typecheck          # pyright type check
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes (for AI) | Enables LLM narrative generation |
+| `AOIP_LLM__PROVIDER` | Yes | LLM backend selector: `ollama` (local) or `anthropic` (prod) |
+| `AOIP_LLM__MODEL` | Yes | Model ID for selected provider |
+| `ANTHROPIC_API_KEY` | Conditional | Required when `AOIP_LLM__PROVIDER=anthropic` |
+| `AOIP_LLM__OLLAMA_BASE_URL` | Conditional | Required when `AOIP_LLM__PROVIDER=ollama` (default: `http://localhost:11434`) |
+| `AOIP_LLM__OLLAMA_TIMEOUT_SECONDS` | No | Ollama HTTP timeout seconds (default: `120`) |
 | `AOIP_AUTH_DISABLED` | No | `true` to skip API key auth in dev |
 | `AOIP_API_KEY_ADMIN` | No | Register admin API key at startup |
 | `AOIP_API_KEY_OPERATOR` | No | Register operator API key at startup |
@@ -307,6 +345,28 @@ make test-cov           # with coverage report (40% minimum gate)
 uv run pytest -v tests/test_ai_gaps.py   # single file
 ```
 
+### LLM smoke tests
+
+Quick provider smoke test through the project LLM wrapper:
+
+```bash
+AOIP_LLM__PROVIDER=ollama \
+AOIP_LLM__MODEL=llama3.2:latest \
+AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434 \
+python - <<'PY'
+from ai_systems.core.llm import generate
+print(generate('Reply with exactly: ollama_smoke_ok'))
+PY
+```
+
+API-level smoke test (after `make dev`):
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Reply with exactly: api_smoke_ok","store_id":"245"}'
+```
+
 ## Conduktor not responding
 
 ```bash
@@ -322,7 +382,9 @@ make conduktor-restart  # restart the container (clears frozen HTTP thread pool)
 | Broker containers stuck `starting` | Volumes may have corrupted Raft metadata; run `make down` then wipe broker volumes: `docker volume rm $(docker volume ls -q \| grep broker)` then `make up` |
 | Conduktor shows unhealthy | Run `make conduktor-restart` — autoheal also handles this automatically |
 | `ModuleNotFoundError` | Run `make install` |
-| LLM returns structured text only | Set `ANTHROPIC_API_KEY` in `.env` |
+| Ollama calls fail with connection refused | Start Ollama (`ollama serve`) and verify `AOIP_LLM__OLLAMA_BASE_URL` |
+| Anthropic calls fail with missing key | Set `ANTHROPIC_API_KEY` and `AOIP_LLM__PROVIDER=anthropic` |
+| LLM output looks degraded in Ollama mode | Use a stronger Ollama model or switch provider to Anthropic |
 | Port 8000 in use | Kill existing process or run `make dev` with `--port 8001` |
 
 ## Deployment Notes

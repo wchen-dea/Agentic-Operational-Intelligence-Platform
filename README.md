@@ -98,6 +98,38 @@ make produce        # start synthetic Kafka producer (15 canonical topics)
 make test           # run test suite
 ```
 
+## LLM provider profiles
+
+### Local development (Ollama)
+
+```bash
+AOIP_LLM__PROVIDER=ollama
+AOIP_LLM__MODEL=llama3.2:latest
+AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
+AOIP_LLM__OLLAMA_TIMEOUT_SECONDS=120
+```
+
+Start/check Ollama:
+
+```bash
+ollama serve
+curl --noproxy '*' http://localhost:11434/api/tags
+```
+
+### Production (Anthropic)
+
+```bash
+AOIP_LLM__PROVIDER=anthropic
+AOIP_LLM__MODEL=claude-sonnet-4-20250514
+ANTHROPIC_API_KEY=<secret>
+```
+
+Notes:
+
+- Ollama supports sync, async, and streaming generation in this project.
+- Tool-calling falls back to plain generation when provider is Ollama.
+- Image generation is Anthropic-only in the current implementation.
+
 ## Repo layout
 
 ```text
