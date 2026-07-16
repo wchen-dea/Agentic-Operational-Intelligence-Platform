@@ -79,6 +79,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
 | [Local Development Architecture](docs/architecture_local.md) | Docker Compose services · startup sequence · resource limits · endpoints |
 | [Kubernetes / Production Architecture](docs/architecture_amazon_eks.md) | EKS layout · AWS managed services · HPA · secrets · production replacements |
 | [System Overview](docs/system_overview.md) | 8-stage table · reference flowcharts · agent orchestration · implementation reference |
+| [Frameworks and Design Patterns](docs/frameworks_and_design_patterns.md) | Technology stack by layer + concrete code-level pattern mapping |
 | [KPI Definitions](docs/kpi_definitions.md) | 16 business KPIs with units, direction, and alert thresholds |
 | [Copilot UI](docs/copilot_ui.md) | Front-end integration guide · API priority order · auth |
 | [CI/CD Automation](docs/cicd_automation.md) | GitHub Actions pipeline · branch strategy · deployment · coverage gate |

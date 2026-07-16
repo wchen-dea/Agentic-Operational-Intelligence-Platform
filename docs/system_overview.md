@@ -8,6 +8,7 @@ See the split architecture documents for details:
 - [Observability](architecture_observability.md) — metrics, evaluation, tracing
 - [Local Development](architecture_local.md) — Docker Compose service map
 - [Kubernetes / Production](architecture_amazon_eks.md) — EKS layout, AWS replacements
+- [Frameworks and Design Patterns](frameworks_and_design_patterns.md) — stack catalog and implementation patterns
 - [Runbook](runbook.md) — setup and operational procedures
 
 ## Eight pipeline stages
