@@ -86,6 +86,18 @@ make topics                                 # verify topics exist
 # Conduktor: http://localhost:8086  Schema Registry: http://localhost:8081
 ```
 
+Producer runtime model:
+
+- `data_platform.producer.mdm.master_batch`
+  - Produces master-data topics in batch mode.
+  - Restricted to Airflow DAG context (`mdm_daily_processing`).
+- `data_platform.producer.transaction.realtime`
+  - Produces transaction topics in real-time mode.
+  - Loads canonical master IDs from Kafka at startup.
+  - Rebinds transaction FK pools to those canonical IDs.
+  - Pre-validates sampled FK references and blocks start on mismatch.
+  - Enforces customer-store consistency (customer for a site cannot be emitted for another site).
+
 Topics produced: `CanonicalSalesforceCrmAppointment`, `CanonicalSapSalesorderDetail`, `CanonicalTrendwellVehivleInspection`, `CanonicalKronosCrewtime`, `CanonicalWarehouseInventorySnapshot`, and 10 more.
 
 ### Stage 2 — Flink (canonical → PDM Sink topics)
@@ -213,6 +225,8 @@ make airflow-down       # stop Airflow
 
 The `dbt_lakehouse_pipeline` DAG runs every 30 minutes:
 `start → dbt deps → bronze (run + test) → silver (run + test) → gold (run + test) → analytics (run + test) → end`
+
+The `mdm_daily_processing` DAG runs daily and triggers `data_platform.producer.mdm.master_batch --runs 1`.
 
 ### Post-restart checks (recommended)
 

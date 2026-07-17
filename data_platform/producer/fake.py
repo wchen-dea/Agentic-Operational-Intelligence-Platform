@@ -37,6 +37,32 @@ EMPLOYEE_TO_PERSON_NUM = {
     for i, emp in enumerate(EMPLOYEE_IDS)
 }
 
+CUSTOMER_TO_STORE: dict[str, str] = {}
+STORE_TO_CUSTOMERS: dict[str, list[str]] = {}
+
+
+def rebuild_customer_store_map() -> None:
+    global CUSTOMER_TO_STORE, STORE_TO_CUSTOMERS
+
+    if not STORE_IDS:
+        CUSTOMER_TO_STORE = {}
+        STORE_TO_CUSTOMERS = {}
+        return
+
+    mapping: dict[str, str] = {}
+    for idx, customer_id in enumerate(CUSTOMER_IDS):
+        mapping[customer_id] = STORE_IDS[idx % len(STORE_IDS)]
+
+    grouped: dict[str, list[str]] = {store_id: [] for store_id in STORE_IDS}
+    for customer_id, store_id in mapping.items():
+        grouped.setdefault(store_id, []).append(customer_id)
+
+    CUSTOMER_TO_STORE = mapping
+    STORE_TO_CUSTOMERS = grouped
+
+
+rebuild_customer_store_map()
+
 VEHICLE_MAKES = ["Toyota", "Ford", "Chevrolet", "Honda", "Nissan", "BMW", "Mercedes", "Hyundai", "Kia", "Subaru"]
 VEHICLE_MODELS = {
     "Toyota": ["Camry", "Corolla", "RAV4", "Tundra", "Tacoma"],
@@ -159,6 +185,17 @@ def rand_store() -> str:
 
 def rand_customer() -> str:
     return random.choice(CUSTOMER_IDS)
+
+
+def rand_customer_for_store(store_id: str) -> str:
+    customers = STORE_TO_CUSTOMERS.get(store_id)
+    if customers:
+        return random.choice(customers)
+    return rand_customer()
+
+
+def store_for_customer(customer_id: str) -> str | None:
+    return CUSTOMER_TO_STORE.get(customer_id)
 
 
 def rand_vehicle() -> str:

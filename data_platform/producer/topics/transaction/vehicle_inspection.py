@@ -8,7 +8,7 @@ from data_platform.producer.fake import (
     maybe,
     now_ts,
     rand_assembly_id,
-    rand_customer,
+    rand_customer_for_store,
     rand_employee,
     rand_make_model,
     rand_name,
@@ -50,7 +50,7 @@ class VehicleInspectionProducer(AvroKafkaProducer):
         return {
             "kafkaKey": insp_id,
             "inspectionIdentifier": insp_id,
-            "customerIdentifier": rand_customer(),
+            "customerIdentifier": rand_customer_for_store(site),
             "VIN": maybe(rand_vin()),
             "vehicleLicensePlateNumber": maybe(
                 f"{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.randint(100000, 999999)}"

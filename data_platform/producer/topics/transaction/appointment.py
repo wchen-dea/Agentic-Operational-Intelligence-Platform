@@ -9,7 +9,7 @@ from data_platform.producer.fake import (
     maybe,
     now_ts,
     rand_assembly_id,
-    rand_customer,
+    rand_customer_for_store,
     rand_customer_vehicle_id,
     rand_date,
     rand_store,
@@ -28,7 +28,7 @@ class AppointmentProducer(AvroKafkaProducer):
     def generate(self):
         appt_id = short_uid()
         site = rand_store()
-        cust_id = rand_customer()
+        cust_id = rand_customer_for_store(site)
         vehicle_id = rand_vehicle()
         ts_create = rand_ts(30)
         appt_type = random.choice(APPT_TYPES)

@@ -78,6 +78,13 @@ graph TB
 
 Publishes Avro-encoded events to 15 canonical Kafka topics, simulating or relaying Aurora MySQL operational transactions.
 
+Producer structure and controls:
+
+- `data_platform/producer/topics/mdm/*` and `data_platform/producer/topics/transaction/*` split master vs transaction generators.
+- `data_platform/producer/mdm/master_batch.py` is scheduled daily via Airflow DAG `mdm_daily_processing`.
+- `data_platform/producer/transaction/realtime.py` performs startup FK checks against canonical master topics and rebinding of FK pools to existing canonical IDs.
+- Customer-bearing transaction events enforce site consistency (`customerIdentifier` is selected from the same `siteNumber` store assignment).
+
 **Canonical topics produced:**
 
 | Domain | Kafka topic |

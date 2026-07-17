@@ -9,7 +9,7 @@ from data_platform.producer.fake import (
     rand_amount,
     rand_article,
     rand_assembly_id,
-    rand_customer,
+    rand_customer_for_store,
     rand_customer_vehicle_id,
     rand_date,
     rand_employee,
@@ -80,7 +80,7 @@ class SalesOrderProducer(AvroKafkaProducer):
     def generate(self):
         so_id = short_uid()
         site = rand_store()
-        cust_id = rand_customer()
+        cust_id = rand_customer_for_store(site)
         vehicle_id = rand_vehicle()
         n_items = random.randint(1, 4)
         ts = rand_ts(30)

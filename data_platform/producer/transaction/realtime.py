@@ -201,6 +201,7 @@ def _apply_master_ids_to_fake_pools(master_ids: dict[str, set[str]]) -> None:
         employee_id: fake.PERSON_NUMS[i % len(fake.PERSON_NUMS)]
         for i, employee_id in enumerate(fake.EMPLOYEE_IDS)
     }
+    fake.rebuild_customer_store_map()
 
     logger.info(
         "Bound transaction ID pools to canonical MDM IDs article=%d customer=%d vehicle=%d employee=%d site=%d",
@@ -252,6 +253,20 @@ def _validate_transaction_foreign_keys(
                     violations[alias].append(f"{field_path}={fk_value}")
                     if len(violations[alias]) >= 10:
                         break
+
+            site_number = record.get("siteNumber")
+            customer_identifier = record.get("customerIdentifier")
+            if site_number is not None and customer_identifier is not None:
+                from data_platform.producer import fake
+
+                assigned_store = fake.store_for_customer(str(customer_identifier))
+                if assigned_store is not None and str(site_number) != assigned_store:
+                    violations[alias].append(
+                        f"customer-store-mismatch customerIdentifier={customer_identifier} siteNumber={site_number}"
+                    )
+                    if len(violations[alias]) >= 10:
+                        break
+
             if len(violations[alias]) >= 10:
                 break
 

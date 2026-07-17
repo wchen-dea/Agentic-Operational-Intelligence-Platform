@@ -154,6 +154,11 @@ data_platform/
   schema/            Avro schemas for 5 canonical topic domains
   ddl/               MySQL DDL init scripts (retail_ops)
   producer/          Synthetic Avro message producer (15 topics)
+    mdm/             Master-data batch runner (Airflow-triggered)
+    transaction/     Transaction real-time runner (FK preflight)
+    topics/
+      mdm/           Master topic generators
+      transaction/   Transaction topic generators
   spark/             PySpark Structured Streaming — CDC → MinIO landing (Iceberg)
   dbt/               dbt Core project — staging → bronze → silver → gold → analytics
     models/
@@ -218,6 +223,15 @@ make dbt-run LAYER=analytics          # run single layer
 make airflow-up                       # build + start (webserver + scheduler)
 make airflow-trigger                  # fire dbt_lakehouse_pipeline manually
 ```
+
+`mdm_daily_processing` runs once daily and is the only supported scheduler for
+`data_platform.producer.mdm.master_batch`.
+
+`data_platform.producer.transaction.realtime` performs a startup preflight that:
+- Loads canonical IDs already produced by MDM topics.
+- Rebinds transaction FK pools to those canonical IDs.
+- Validates sampled transaction records for FK existence.
+- Enforces customer-store consistency (`customerIdentifier` must match `siteNumber`).
 
 ### Analytics layer
 
