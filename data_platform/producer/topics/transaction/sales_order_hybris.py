@@ -1,7 +1,9 @@
 """Producer: CanonicalSapSalesorderHybris"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import rand_ts, short_uid, uid
 
 
 class SalesOrderHybrisProducer(AvroKafkaProducer):

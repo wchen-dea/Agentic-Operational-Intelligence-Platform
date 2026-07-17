@@ -1,7 +1,28 @@
 """Producer: CanonicalTrendwellVehivleWorkorder"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    FIRST_NAMES,
+    LAST_NAMES,
+    ORDER_TYPES,
+    maybe,
+    now_ts,
+    rand_amount,
+    rand_article,
+    rand_assembly_id,
+    rand_customer,
+    rand_customer_vehicle_id,
+    rand_employee,
+    rand_store,
+    rand_time_offset,
+    rand_trim_id,
+    rand_ts,
+    rand_vehicle,
+    rand_vin,
+    short_uid,
+)
 
 
 class WorkOrderProducer(AvroKafkaProducer):
@@ -16,7 +37,6 @@ class WorkOrderProducer(AvroKafkaProducer):
         ts_bay = now_ts(random.randint(300, 1800))
         ts_out = now_ts(random.randint(1800, 7200))
         emp = rand_employee()
-        make, model = rand_make_model()
 
         line_items = [
             {
@@ -58,10 +78,10 @@ class WorkOrderProducer(AvroKafkaProducer):
             "siteNumber": site,
             "storeCode": f"STORE{site}",
             "customerIdentifier": maybe(rand_customer()),
-            "customerVehicleIdentifier": short_uid(),
+            "customerVehicleIdentifier": rand_customer_vehicle_id(),
             "vehicleIdentifier": maybe(rand_vehicle()),
-            "trimIdentifier": maybe(short_uid()),
-            "assemblyIdentifier": maybe(random.choice(["01", "02"])),
+            "trimIdentifier": maybe(rand_trim_id()),
+            "assemblyIdentifier": maybe(rand_assembly_id()),
             "vehicleMileage": maybe(str(random.randint(5000, 200000))),
             "createTimestamp": ts_in,
             "lastModifyTimestamp": now_ts(),

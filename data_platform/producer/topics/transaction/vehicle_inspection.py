@@ -1,7 +1,25 @@
 """Producer: CanonicalTrendwellVehivleInspection"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    TIRE_POSITIONS,
+    maybe,
+    now_ts,
+    rand_assembly_id,
+    rand_customer,
+    rand_employee,
+    rand_make_model,
+    rand_name,
+    rand_store,
+    rand_time_offset,
+    rand_trim_id,
+    rand_ts,
+    rand_vehicle,
+    rand_vin,
+    uid,
+)
 
 
 class VehicleInspectionProducer(AvroKafkaProducer):
@@ -63,8 +81,8 @@ class VehicleInspectionProducer(AvroKafkaProducer):
             "vehicleYear": str(random.randint(2010, 2025)),
             "vehicleMake": make,
             "vehicleModel": model,
-            "trimIdentifier": maybe(short_uid()),
-            "assemblyIdentifier": maybe(random.choice(["01", "02"])),
+            "trimIdentifier": maybe(rand_trim_id()),
+            "assemblyIdentifier": maybe(rand_assembly_id()),
             "chassisIdentifier": None,
             "frontAssemblyCode": None,
             "rearAssemblyCode": None,

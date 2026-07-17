@@ -1,7 +1,24 @@
 """Producer: CanonicalSalesforceCrmAppointment"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    APPT_TYPES,
+    ORDER_TYPES,
+    maybe,
+    now_ts,
+    rand_assembly_id,
+    rand_customer,
+    rand_customer_vehicle_id,
+    rand_date,
+    rand_store,
+    rand_time_offset,
+    rand_trim_id,
+    rand_ts,
+    rand_vehicle,
+    short_uid,
+)
 
 
 class AppointmentProducer(AvroKafkaProducer):
@@ -31,17 +48,7 @@ class AppointmentProducer(AvroKafkaProducer):
             }
             for _ in range(random.randint(0, 2))
         ]
-        tasks = (
-            [
-                {
-                    "taskIdentifier": short_uid(),
-                    "taskTypeCode": random.choice(["INSTALL", "BALANCE", "ROTATE"]),
-                }
-                for _ in range(random.randint(0, 3))
-            ]
-            if False
-            else []
-        )  # tasks schema not defined - omit
+        tasks = []  # tasks schema not defined - omit
 
         return {
             "kafkaKey": appt_id,
@@ -54,10 +61,10 @@ class AppointmentProducer(AvroKafkaProducer):
             "siteNumber": site,
             "customerIdentifier": cust_id,
             "customerTypeName": maybe(random.choice(["RETAIL", "FLEET", "COMMERCIAL"])),
-            "customerVehicleIdentifier": maybe(short_uid()),
+            "customerVehicleIdentifier": maybe(rand_customer_vehicle_id()),
             "vehicleIdentifier": maybe(vehicle_id),
-            "trimIdentifier": maybe(short_uid()),
-            "assemblyIdentifier": maybe(random.choice(["01", "02", "03"])),
+            "trimIdentifier": maybe(rand_trim_id()),
+            "assemblyIdentifier": maybe(rand_assembly_id()),
             "statusCode": status,
             "bookingOriginCode": maybe(random.choice(["WEB", "CALL", "WALKIN", "APP"])),
             "orderTypeName": maybe(random.choice(ORDER_TYPES)),

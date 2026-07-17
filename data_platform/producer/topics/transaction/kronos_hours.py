@@ -1,7 +1,24 @@
 """Producer: CanonicalKronosHours"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    PAY_CODE_NAMES,
+    PAY_CODE_TYPES,
+    STAFF_GROUPS,
+    maybe,
+    now_ts,
+    person_identifier,
+    person_num_for_employee,
+    rand_date,
+    rand_employee,
+    rand_name,
+    rand_store,
+    rand_time_offset,
+    rand_ts,
+    today_date,
+)
 
 
 class KronosHoursProducer(AvroKafkaProducer):
@@ -9,8 +26,8 @@ class KronosHoursProducer(AvroKafkaProducer):
     SCHEMA_FILE = "kronos.hours.avsc"
 
     def generate(self):
-        person = random.choice(PERSON_NUMS)
         emp_id = rand_employee()
+        person = person_num_for_employee(emp_id)
         pc_idx = random.randint(0, len(PAY_CODE_NAMES) - 1)
         pay_code = PAY_CODE_NAMES[pc_idx]
         pc_type = PAY_CODE_TYPES[pc_idx]
@@ -57,7 +74,7 @@ class KronosHoursProducer(AvroKafkaProducer):
             "timeSheetItemIdentifier": ts_item,
             "wfcTotalIdentifier": random.randint(1, 99999),
             "laborAcctIdentifier": random.randint(1, 9999),
-            "personIdentifier": random.randint(1, 99999),
+            "personIdentifier": person_identifier(person),
             "laborLevelDSC1": maybe(f"STORE{store}"),
             "laborLevelDSC2": None,
             "laborLevelDSC3": None,

@@ -1,7 +1,9 @@
 """Producer: CanonicalKronosCrewtime"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import STAFF_GROUPS, maybe, now_ts, rand_store, rand_ts
 
 
 class CrewtimeProducer(AvroKafkaProducer):
@@ -13,7 +15,7 @@ class CrewtimeProducer(AvroKafkaProducer):
 
     def generate(self):
         site = rand_store()
-        store_num = random.randint(1000, 9999)
+        store_num = int(site)
         dept = random.randint(10, 99)
         group = random.choice(STAFF_GROUPS)
         demand = self._hours(40.0)

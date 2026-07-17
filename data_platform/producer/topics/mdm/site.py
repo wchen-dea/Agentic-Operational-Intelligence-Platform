@@ -1,7 +1,9 @@
 """Producer: CanonicalKronosSite"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import maybe, rand_date
 
 _CITIES = ["Phoenix", "Dallas", "Denver", "Atlanta", "Chicago", "Los Angeles", "Seattle", "Miami", "Houston", "Boston"]
 _STATES = ["AZ", "TX", "CO", "GA", "IL", "CA", "WA", "FL", "TX", "MA"]
@@ -13,7 +15,7 @@ class SiteProducer(AvroKafkaProducer):
     SCHEMA_FILE = "kronos.site.avsc"
 
     def generate(self):
-        site = rand_store()
+        site = f"{random.randint(100, 999)}"
         idx = int(site) % len(_CITIES)
         city = _CITIES[idx % len(_CITIES)]
         state = _STATES[idx % len(_STATES)]

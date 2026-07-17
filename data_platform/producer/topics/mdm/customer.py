@@ -1,7 +1,17 @@
 """Producer: CanonicalSalesforceCrmCustomer"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    FIRST_NAMES,
+    LAST_NAMES,
+    maybe,
+    now_ts,
+    rand_time_offset,
+    rand_ts,
+    short_uid,
+)
 
 
 class CustomerProducer(AvroKafkaProducer):
@@ -9,7 +19,7 @@ class CustomerProducer(AvroKafkaProducer):
     SCHEMA_FILE = "salesforce.crm.customer.avsc"
 
     def generate(self):
-        cust_id = rand_customer()
+        cust_id = f"CUST{random.randint(10000000, 99999999)}"
         first = random.choice(FIRST_NAMES)
         last = random.choice(LAST_NAMES)
         ts_create = rand_ts(365)
@@ -36,13 +46,7 @@ class CustomerProducer(AvroKafkaProducer):
             }
             for _ in range(random.randint(0, 2))
         ]
-        vehicles = [
-            {
-                "customerVehicleIdentifier": short_uid(),
-                "vehicleIdentifier": rand_vehicle(),
-            }
-            for _ in range(random.randint(0, 3))
-        ]
+        vehicles = []
         addresses = [
             {
                 "customerAddressIdentifier": short_uid(),

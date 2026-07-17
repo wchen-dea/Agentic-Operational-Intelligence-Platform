@@ -1,14 +1,32 @@
 """Producer: CanonicalSapSalesorderInvoice"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    maybe,
+    now_ts,
+    rand_amount,
+    rand_article,
+    rand_assembly_id,
+    rand_customer,
+    rand_customer_vehicle_id,
+    rand_date,
+    rand_store,
+    rand_time_offset,
+    rand_trim_id,
+    rand_ts,
+    rand_vehicle,
+    short_uid,
+    uid,
+)
 
 
 class SalesOrderReceiptProducer(AvroKafkaProducer):
     TOPIC = "CanonicalSapSalesorderInvoice"
     SCHEMA_FILE = "sap.salesorder.invoice.avsc"
 
-    def _li(self, sor_id, num):
+    def _li(self, num):
         retail = rand_amount(80, 800)
         net = round(retail * random.uniform(0.80, 1.0), 2)
         return {
@@ -63,7 +81,7 @@ class SalesOrderReceiptProducer(AvroKafkaProducer):
         n_li = random.randint(1, 4)
         ts = rand_ts(30)
 
-        line_items = [self._li(sor_id, i + 1) for i in range(n_li)]
+        line_items = [self._li(i + 1) for i in range(n_li)]
         payments = [
             {
                 "paymentId": 1,
@@ -84,10 +102,10 @@ class SalesOrderReceiptProducer(AvroKafkaProducer):
             "siteNumber": site,
             "profitCenterCode": site,
             "customerIdentifier": rand_customer(),
-            "customerVehicleIdentifier": maybe(short_uid()),
+            "customerVehicleIdentifier": maybe(rand_customer_vehicle_id()),
             "vehicleIdentifier": maybe(rand_vehicle()),
-            "trimIdentifier": maybe(short_uid()),
-            "assemblyIdentifier": maybe(random.choice(["01", "02"])),
+            "trimIdentifier": maybe(rand_trim_id()),
+            "assemblyIdentifier": maybe(rand_assembly_id()),
             "liftIdentifier": maybe(f"LIFT{random.randint(1, 8)}"),
             "orderTransactionTypeCode": random.choice(["RG", "CR"]),
             "orderTransactionTypeDescription": random.choice(["Regular", "Credit"]),

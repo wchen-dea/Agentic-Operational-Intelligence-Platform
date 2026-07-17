@@ -1,7 +1,9 @@
 """Producer: CanonicalSapSalesorderVouche"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import VOUCHER_TYPES, maybe, rand_amount, rand_date, rand_employee, rand_store
 
 
 class VoucherProducer(AvroKafkaProducer):

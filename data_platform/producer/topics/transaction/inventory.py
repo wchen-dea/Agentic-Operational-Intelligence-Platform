@@ -1,7 +1,9 @@
 """Producer: CanonicalWarehouseInventorySnapshot"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import now_ts, rand_article, rand_store, rand_time_offset
 
 
 class InventoryProducer(AvroKafkaProducer):

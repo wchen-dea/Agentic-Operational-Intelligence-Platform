@@ -1,7 +1,9 @@
 """Producer: CanonicalTrendwellVehivleMaster"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import VEHICLE_CLASSES, rand_make_model, short_uid
 
 
 class VehicleProducer(AvroKafkaProducer):
@@ -9,7 +11,7 @@ class VehicleProducer(AvroKafkaProducer):
     SCHEMA_FILE = "trendwell.vehivle.master.avsc"
 
     def generate(self):
-        vid = rand_vehicle()
+        vid = f"VEH{random.randint(10000000, 99999999)}"
         make, model = rand_make_model()
         year = str(random.randint(2005, 2026))
         trims = [

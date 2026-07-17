@@ -1,7 +1,9 @@
 """Producer: CanonicalKronosEmployee"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import FIRST_NAMES, LAST_NAMES, maybe, rand_date, rand_name
 
 
 class EmployeeProducer(AvroKafkaProducer):
@@ -9,10 +11,10 @@ class EmployeeProducer(AvroKafkaProducer):
     SCHEMA_FILE = "kronos.employee.avsc"
 
     def generate(self):
-        emp_id = rand_employee()
+        emp_id = f"EMP{random.randint(10000, 99999)}"
         first = random.choice(FIRST_NAMES)
         last = random.choice(LAST_NAMES)
-        store = rand_store()
+        store = random.randint(100, 999)
         hire_date = rand_date(1825)
         return {
             "kafkaKey": emp_id,
@@ -29,7 +31,7 @@ class EmployeeProducer(AvroKafkaProducer):
             "employmentStatusCode": random.choice(["A", "T", "L"]),
             "employeeTypeName": random.choice(["FT", "PT"]),
             "storeCode": f"STORE{store}",
-            "supervisorIdentifier": maybe(rand_employee()),
+            "supervisorIdentifier": maybe(f"EMP{random.randint(10000, 99999)}"),
             "supervisorName": maybe(rand_name()),
             "effectiveStartDate": hire_date,
             "effectiveTerminationDate": None,

@@ -1,14 +1,32 @@
 """Producer: CanonicalSapSalesorderDetail"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import (
+    maybe,
+    now_ts,
+    rand_amount,
+    rand_article,
+    rand_assembly_id,
+    rand_customer,
+    rand_customer_vehicle_id,
+    rand_date,
+    rand_employee,
+    rand_store,
+    rand_time_offset,
+    rand_trim_id,
+    rand_ts,
+    rand_vehicle,
+    short_uid,
+)
 
 
 class SalesOrderProducer(AvroKafkaProducer):
     TOPIC = "CanonicalSapSalesorderDetail"
     SCHEMA_FILE = "sap.salesorder.detail.avsc"
 
-    def _line_item(self, so_id, num):
+    def _line_item(self, num):
         retail = rand_amount(80, 800)
         disc = round(retail * random.uniform(0, 0.15), 2)
         net = round(retail - disc, 2)
@@ -68,7 +86,7 @@ class SalesOrderProducer(AvroKafkaProducer):
         ts = rand_ts(30)
         status = random.choice(["A", "B", "C", "D"])
 
-        line_items = [self._line_item(so_id, i + 1) for i in range(n_items)]
+        line_items = [self._line_item(i + 1) for i in range(n_items)]
         promotions = [
             {
                 "salesOrderLineItemNumber": random.randint(1, n_items),
@@ -87,10 +105,10 @@ class SalesOrderProducer(AvroKafkaProducer):
             "siteNumber": site,
             "profitCenterCode": site,
             "customerIdentifier": cust_id,
-            "customerVehicleIdentifier": maybe(short_uid()),
+            "customerVehicleIdentifier": maybe(rand_customer_vehicle_id()),
             "vehicleIdentifier": maybe(vehicle_id),
-            "trimIdentifier": maybe(short_uid()),
-            "assemblyIdentifier": maybe(random.choice(["01", "02"])),
+            "trimIdentifier": maybe(rand_trim_id()),
+            "assemblyIdentifier": maybe(rand_assembly_id()),
             "liftIdentifier": maybe(f"LIFT{random.randint(1, 8)}"),
             "salesOrderCreatedDate": rand_date(7),
             "salesOrderStatusCode": status,

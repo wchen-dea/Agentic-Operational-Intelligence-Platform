@@ -28,6 +28,14 @@ VEHICLE_IDS = [str(uuid.uuid4())[:14] for _ in range(200)]
 EMPLOYEE_IDS = [f"EMP{random.randint(10000, 99999)}" for _ in range(100)]
 PERSON_NUMS = [f"P{random.randint(100000, 999999)}" for _ in range(80)]
 ARTICLE_NUMS = [f"ART{random.randint(10000000, 99999999)}" for _ in range(150)]
+CUSTOMER_VEHICLE_IDS = [f"CVM{random.randint(100000, 999999)}" for _ in range(300)]
+TRIM_IDS = [f"TRM{random.randint(100000, 999999)}" for _ in range(180)]
+ASSEMBLY_IDS = ["01", "02", "03"]
+
+EMPLOYEE_TO_PERSON_NUM = {
+    emp: PERSON_NUMS[i % len(PERSON_NUMS)]
+    for i, emp in enumerate(EMPLOYEE_IDS)
+}
 
 VEHICLE_MAKES = ["Toyota", "Ford", "Chevrolet", "Honda", "Nissan", "BMW", "Mercedes", "Hyundai", "Kia", "Subaru"]
 VEHICLE_MODELS = {
@@ -163,6 +171,26 @@ def rand_article() -> str:
 
 def rand_employee() -> str:
     return random.choice(EMPLOYEE_IDS)
+
+
+def rand_customer_vehicle_id() -> str:
+    return random.choice(CUSTOMER_VEHICLE_IDS)
+
+
+def rand_trim_id() -> str:
+    return random.choice(TRIM_IDS)
+
+
+def rand_assembly_id() -> str:
+    return random.choice(ASSEMBLY_IDS)
+
+
+def person_num_for_employee(employee_id: str) -> str:
+    return EMPLOYEE_TO_PERSON_NUM.get(employee_id, random.choice(PERSON_NUMS))
+
+
+def person_identifier(person_num: str) -> int:
+    return int(person_num.replace("P", ""))
 
 
 def rand_name() -> str:

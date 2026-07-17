@@ -8,6 +8,12 @@ Usage
 # Produce 100 appointment messages (docker defaults):
   python -m data_platform.producer.main --topic appointment --count 100
 
+# Produce all master data topics:
+    python -m data_platform.producer.main --producer-type master_data --count 100
+
+# Produce all transaction data topics continuously:
+    python -m data_platform.producer.main --producer-type transaction_data --interval 0.5
+
 # Produce to all topics simultaneously (live mode, 0.5 s between each burst):
   python -m data_platform.producer.main --all --interval 0.5
 
@@ -32,29 +38,29 @@ import argparse
 import logging
 import os
 import signal
-import sys
 import threading
 import time
 from typing import Type
 
 from data_platform.producer.base import AvroKafkaProducer
+from data_platform.producer.topics import PRODUCER_TYPES, UNCATEGORIZED_TOPICS
 
 # ── Import all topic producers ────────────────────────────────────────────────
-from data_platform.producer.topics.appointment import AppointmentProducer
-from data_platform.producer.topics.customer import CustomerProducer
-from data_platform.producer.topics.sales_order import SalesOrderProducer
-from data_platform.producer.topics.sales_order_receipt import SalesOrderReceiptProducer
-from data_platform.producer.topics.sales_order_hybris import SalesOrderHybrisProducer
-from data_platform.producer.topics.voucher import VoucherProducer
-from data_platform.producer.topics.vehicle_inspection import VehicleInspectionProducer
-from data_platform.producer.topics.vehicle import VehicleProducer
-from data_platform.producer.topics.work_order import WorkOrderProducer
-from data_platform.producer.topics.article import ArticleProducer
-from data_platform.producer.topics.inventory import InventoryProducer
-from data_platform.producer.topics.crewtime import CrewtimeProducer
-from data_platform.producer.topics.employee import EmployeeProducer
-from data_platform.producer.topics.kronos_hours import KronosHoursProducer
-from data_platform.producer.topics.site import SiteProducer
+from data_platform.producer.topics.mdm.article import ArticleProducer
+from data_platform.producer.topics.mdm.customer import CustomerProducer
+from data_platform.producer.topics.mdm.employee import EmployeeProducer
+from data_platform.producer.topics.mdm.site import SiteProducer
+from data_platform.producer.topics.mdm.vehicle import VehicleProducer
+from data_platform.producer.topics.transaction.appointment import AppointmentProducer
+from data_platform.producer.topics.transaction.crewtime import CrewtimeProducer
+from data_platform.producer.topics.transaction.kronos_hours import KronosHoursProducer
+from data_platform.producer.topics.transaction.inventory import InventoryProducer
+from data_platform.producer.topics.transaction.sales_order import SalesOrderProducer
+from data_platform.producer.topics.transaction.sales_order_hybris import SalesOrderHybrisProducer
+from data_platform.producer.topics.transaction.sales_order_receipt import SalesOrderReceiptProducer
+from data_platform.producer.topics.transaction.vehicle_inspection import VehicleInspectionProducer
+from data_platform.producer.topics.transaction.voucher import VoucherProducer
+from data_platform.producer.topics.transaction.work_order import WorkOrderProducer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -106,6 +112,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Produce to all 15 canonical topics simultaneously",
     )
+    topic_group.add_argument(
+        "--producer-type",
+        choices=sorted(PRODUCER_TYPES),
+        metavar="TYPE",
+        help=(
+            "Produce by category type: "
+            + ", ".join(f"{name} ({len(topics)} topics)" for name, topics in PRODUCER_TYPES.items())
+        ),
+    )
     p.add_argument(
         "--count",
         type=int,
@@ -155,20 +170,7 @@ def _run_producer(
         logger.info("[%s] stopped after %d messages", cls.TOPIC, i)
 
 
-def main() -> None:
-    args = build_parser().parse_args()
-    aliases = list(PRODUCERS) if args.all else args.topic
-
-    logger.info(
-        "Starting %d producer(s)  count=%s  interval=%.2fs  brokers=%s",
-        len(aliases),
-        args.count or "inf",
-        args.interval,
-        args.brokers,
-    )
-
-    stop_event = threading.Event()
-
+def install_signal_handlers(stop_event: threading.Event) -> None:
     def _handle_signal(sig: int, _frame: object) -> None:
         logger.info("Signal %d - stopping all producers ...", sig)
         stop_event.set()
@@ -176,34 +178,79 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    if len(aliases) == 1:
-        # Single producer - run in main thread (simpler error propagation)
-        cls = PRODUCERS[aliases[0]]
-        _run_producer(cls, args.brokers, args.schema_registry, args.count, args.interval, stop_event)
-    else:
-        # Multiple producers - one thread each
-        threads: list[threading.Thread] = []
-        for alias in aliases:
-            cls = PRODUCERS[alias]
-            t = threading.Thread(
-                target=_run_producer,
-                args=(cls, args.brokers, args.schema_registry, args.count, args.interval, stop_event),
-                name=f"prod-{alias}",
-                daemon=True,
-            )
-            t.start()
-            threads.append(t)
-            logger.info("  started: %-30s -> %s", alias, cls.TOPIC)
 
-        try:
-            for t in threads:
-                t.join()
-        except KeyboardInterrupt:
-            stop_event.set()
-            for t in threads:
-                t.join(timeout=10)
+def run_aliases(
+    aliases: list[str],
+    brokers: str,
+    schema_registry: str,
+    count: int | None,
+    interval: float,
+    stop_event: threading.Event | None = None,
+    install_signals: bool = True,
+) -> None:
+    event = stop_event or threading.Event()
+    if install_signals:
+        install_signal_handlers(event)
+
+    logger.info(
+        "Starting %d producer(s)  count=%s  interval=%.2fs  brokers=%s",
+        len(aliases),
+        count or "inf",
+        interval,
+        brokers,
+    )
+
+    if len(aliases) == 1:
+        cls = PRODUCERS[aliases[0]]
+        _run_producer(cls, brokers, schema_registry, count, interval, event)
+        logger.info("All producers finished.")
+        return
+
+    threads: list[threading.Thread] = []
+    for alias in aliases:
+        cls = PRODUCERS[alias]
+        t = threading.Thread(
+            target=_run_producer,
+            args=(cls, brokers, schema_registry, count, interval, event),
+            name=f"prod-{alias}",
+            daemon=True,
+        )
+        t.start()
+        threads.append(t)
+        logger.info("  started: %-30s -> %s", alias, cls.TOPIC)
+
+    try:
+        for t in threads:
+            t.join()
+    except KeyboardInterrupt:
+        event.set()
+        for t in threads:
+            t.join(timeout=10)
 
     logger.info("All producers finished.")
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    if args.all:
+        aliases = list(PRODUCERS)
+    elif args.producer_type:
+        aliases = list(PRODUCER_TYPES[args.producer_type])
+    else:
+        aliases = args.topic
+
+    if args.producer_type:
+        logger.info("Selected producer type=%s topics=%s", args.producer_type, ",".join(aliases))
+    elif args.all and UNCATEGORIZED_TOPICS:
+        logger.info("Including uncategorized topics in --all: %s", ",".join(UNCATEGORIZED_TOPICS))
+
+    run_aliases(
+        aliases=aliases,
+        brokers=args.brokers,
+        schema_registry=args.schema_registry,
+        count=args.count,
+        interval=args.interval,
+    )
 
 
 if __name__ == "__main__":

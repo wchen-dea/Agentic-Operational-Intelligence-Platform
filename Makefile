@@ -60,6 +60,7 @@ help:
 	@printf "  %-28s %s\n" "make lint"              "Ruff lint check"
 	@printf "  %-28s %s\n" "make fmt"               "Ruff auto-format"
 	@printf "  %-28s %s\n" "make typecheck"         "Pyright type check"
+	@printf "  %-28s %s\n" "make clean-producer"    "Remove producer __pycache__/pyc artifacts"
 	@printf "\n$(CYAN)Flink$(RESET)\n"
 	@printf "  %-28s %s\n" "make flink-jar"         "Build connector fat JAR with Maven (required before flink-up)"
 	@printf "  %-28s %s\n" "make flink-up"          "Build and start JobManager + TaskManager"
@@ -262,6 +263,11 @@ fmt:
 .PHONY: typecheck
 typecheck:
 	$(VENV)/bin/pyright
+
+.PHONY: clean-producer
+clean-producer:
+	find data_platform/producer -type d -name '__pycache__' -prune -exec rm -rf {} +
+	find data_platform/producer -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 # ── Flink cluster ─────────────────────────────────────────────────────────────
 FLINK_PIPELINES := appointment article crewtime customer employee \

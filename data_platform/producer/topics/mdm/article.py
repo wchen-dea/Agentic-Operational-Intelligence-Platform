@@ -1,7 +1,9 @@
 """Producer: CanonicalWarehouseInventoryProduct"""
 
+import random
+
 from data_platform.producer.base import AvroKafkaProducer
-from data_platform.producer.fake import *
+from data_platform.producer.fake import maybe, rand_date
 
 _SIZES = ["P205/55R16", "P215/65R16", "P225/60R17", "P235/50R18", "LT265/70R17", "P275/55R20"]
 _BRANDS = [
@@ -23,7 +25,7 @@ class ArticleProducer(AvroKafkaProducer):
     SCHEMA_FILE = "warehouse.inventory.product.avsc"
 
     def generate(self):
-        art_num = rand_article()
+        art_num = f"ART{random.randint(10000000, 99999999)}"
         brand = random.choice(_BRANDS)
         size = random.choice(_SIZES)
         parts = size.replace("P", "").split("/")
