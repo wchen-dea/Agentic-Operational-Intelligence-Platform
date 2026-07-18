@@ -1,3 +1,5 @@
+"""Module for anomaly agent."""
+
 from typing import Any
 
 from ai_systems.tools.alert_tool import detect_kpi_alerts_for_store

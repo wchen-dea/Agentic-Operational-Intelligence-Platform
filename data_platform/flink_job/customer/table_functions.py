@@ -1,3 +1,5 @@
+"""Module for table functions."""
+
 from pyflink.table import DataTypes
 from pyflink.table.udf import udtf
 

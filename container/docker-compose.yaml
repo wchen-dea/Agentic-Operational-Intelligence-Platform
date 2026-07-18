@@ -1,6 +1,4 @@
-# ---------------------------------------------------------------------------
-# Top-level extension fields — YAML anchors for shared service config
-# ---------------------------------------------------------------------------
+# Shared extension anchors
 x-airflow-common: &airflow-common
   build:
     context: ..
@@ -35,9 +33,7 @@ x-airflow-common: &airflow-common
 
 services:
 
-  # ---------------------------------------------------------------------------
-  # Platform API
-  # ---------------------------------------------------------------------------
+  # app: Platform API (FastAPI)
   app:
     build:
       context: ..
@@ -50,17 +46,19 @@ services:
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - AOIP_API_KEY_ADMIN=aoip-local-admin
       - AOIP_REDIS__URL=redis://redis:6379/0
-      # Kafka / Schema Registry
       - KAFKA_BROKERS=broker1:29092,broker2:29092,broker3:29092
       - SCHEMA_REGISTRY_URL=http://schema-registry:8081
-      # KPI source — read from the retail_ops MySQL populated by Kafka Connect JDBC Sink
       - AOIP_KPI_SOURCE=aurora_mysql
       - AOIP_AURORA_MYSQL__HOST=mysql
       - AOIP_AURORA_MYSQL__PORT=3306
       - AOIP_AURORA_MYSQL__DATABASE=retail_ops
       - AOIP_AURORA_MYSQL__USERNAME=connect_user
       - AURORA_PASSWORD=connect_pass
+      - AOIP_NEO4J__URI=bolt://neo4j:7687
+      - AOIP_NEO4J__USERNAME=neo4j
+      - NEO4J_PASSWORD=neo4j
     depends_on:
       redis:
         condition: service_healthy
@@ -85,9 +83,36 @@ services:
       retries: 3
       start_period: 20s
 
-  # ---------------------------------------------------------------------------
-  # Redis — session memory + streaming state cache
-  # ---------------------------------------------------------------------------
+  # webui: Streamlit UI for AI Systems (http://localhost:8501)
+  webui:
+    build:
+      context: ..
+      dockerfile: container/streamlit-ui/Dockerfile
+    hostname: webui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - AI_API_BASE_URL=http://app:8000
+      - AI_API_KEY=aoip-local-admin
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8501/_stcore/health',timeout=4); sys.exit(0 if r.status==200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # redis: Session and stream state cache
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -116,21 +141,115 @@ services:
       retries: 5
       start_period: 5s
 
-  # ---------------------------------------------------------------------------
-  # Confluent Kafka — 3-broker KRaft cluster (no ZooKeeper)
-  #
-  # Internal listeners  : broker1:29092, broker2:29092, broker3:29092
-  # Host listeners      : localhost:9092, localhost:9093, localhost:9094
-  # Controller quorum   : broker1:29093, broker2:29093, broker3:29093
-  # Replication factor  : 3  (min ISR = 2)
-  # ---------------------------------------------------------------------------
+  # neo4j: Graph database for store relationships (http://localhost:7474)
+  neo4j:
+    image: neo4j:5.23-community
+    hostname: neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/neo4j
+    volumes:
+      - neo4j_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p neo4j 'RETURN 1' || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  # prometheus: Metrics scraper (http://localhost:9090)
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    hostname: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    depends_on:
+      app:
+        condition: service_healthy
+      blackbox-exporter:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  # blackbox-exporter: HTTP/TCP probe endpoint for cluster availability checks
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    hostname: blackbox-exporter
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./observability/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+
+  # grafana: Dashboard UI (http://localhost:3000)
+  grafana:
+    image: grafana/grafana:11.1.4
+    hostname: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  # broker1: Kafka broker/controller node 1
   broker1:
     image: confluentinc/cp-kafka:7.9.8
     hostname: broker1
     restart: unless-stopped
     ports:
-      - "9092:9092"   # host access
-      - "9101:9101"   # JMX
+      - "9092:9092"
+      - "9101:9101"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -170,13 +289,14 @@ services:
       retries: 15
       start_period: 300s
 
+  # broker2: Kafka broker/controller node 2
   broker2:
     image: confluentinc/cp-kafka:7.9.8
     hostname: broker2
     restart: unless-stopped
     ports:
       - "9093:9093"
-      - "9102:9102"   # JMX
+      - "9102:9102"
     environment:
       KAFKA_NODE_ID: 2
       KAFKA_PROCESS_ROLES: broker,controller
@@ -216,13 +336,14 @@ services:
       retries: 15
       start_period: 300s
 
+  # broker3: Kafka broker/controller node 3
   broker3:
     image: confluentinc/cp-kafka:7.9.8
     hostname: broker3
     restart: unless-stopped
     ports:
       - "9094:9094"
-      - "9103:9103"   # JMX
+      - "9103:9103"
     environment:
       KAFKA_NODE_ID: 3
       KAFKA_PROCESS_ROLES: broker,controller
@@ -262,14 +383,7 @@ services:
       retries: 15
       start_period: 300s
 
-  # ---------------------------------------------------------------------------
-  # Confluent Schema Registry
-  #
-  # REST endpoint: http://localhost:8081
-  #   GET  /subjects                      list all subjects
-  #   GET  /subjects/{subject}/versions   list versions
-  #   GET  /schemas/ids/{id}              fetch schema by ID
-  # ---------------------------------------------------------------------------
+  # schema-registry: Avro schema service (http://localhost:8081)
   schema-registry:
     image: confluentinc/cp-schema-registry:7.9.8
     hostname: schema-registry
@@ -304,12 +418,7 @@ services:
       retries: 10
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # kafka-init — creates CDC and canonical topics (one-shot, exits 0)
-  #
-  # CDC topics   : retail_ops.aurora.retail_ops.<table>   (Aurora DMS/Debezium)
-  # Canonical topics: one per processed canonical schema
-  # ---------------------------------------------------------------------------
+  # kafka-init: One-shot topic bootstrap
   kafka-init:
     image: confluentinc/cp-kafka:7.9.8
     restart: "no"
@@ -326,13 +435,13 @@ services:
       - |
         set -e
         BROKER=broker1:29092
-        echo '=== Creating CDC source topics (raw ingestion layer) ==='
+        echo '=== Creating CDC source topics (Debezium routed topics) ==='
         for TOPIC in \
-          retail_ops.aurora.retail_ops.sales_orders \
-          retail_ops.aurora.retail_ops.appointments \
-          retail_ops.aurora.retail_ops.pos_invoices \
-          retail_ops.aurora.retail_ops.work_orders \
-          retail_ops.aurora.retail_ops.article_inventory; do
+          cdc_sales_order \
+          cdc_appointment \
+          cdc_sales_order_receipt \
+          cdc_work_order \
+          cdc_article_inventory; do
           kafka-topics --bootstrap-server $$BROKER \
             --create --if-not-exists \
             --topic $$TOPIC \
@@ -389,14 +498,7 @@ services:
         echo '=== All topics ready ==='
         kafka-topics --bootstrap-server $$BROKER --list
 
-  # ---------------------------------------------------------------------------
-  # schema-registry-init — registers all canonical Avro schemas (one-shot)
-  #
-  # Subjects follow the convention: <filename_stem>-value
-  #   e.g.  kronos.hours.avsc  →  subject: CanonicalKronosHours-value
-  #
-  # Idempotent: already-registered schemas are skipped gracefully.
-  # ---------------------------------------------------------------------------
+  # schema-registry-init: One-shot schema registration
   schema-registry-init:
     image: python:3.12-alpine
     restart: "no"
@@ -411,9 +513,7 @@ services:
         condition: service_healthy
     command: python3 /register_schemas.py
 
-  # ---------------------------------------------------------------------------
-  # PostgreSQL — backing store for Conduktor Console
-  # ---------------------------------------------------------------------------
+  # postgresql: Conduktor metadata database
   postgresql:
     image: postgres:16-alpine
     hostname: postgresql
@@ -439,18 +539,7 @@ services:
       retries: 5
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Conduktor Console — Kafka monitoring and management UI
-  #
-  # Web UI   : http://localhost:8086
-  # Login    : admin@conduktor.io / admin  (change via CDK_ADMIN_* vars)
-  #
-  # Features available in the UI:
-  #   - Browse topics, consumer groups, and offsets
-  #   - Produce / consume messages with Avro / Schema Registry support
-  #   - View registered schemas (linked to Schema Registry on port 8081)
-  #   - Monitor broker / partition health and lag
-  # ---------------------------------------------------------------------------
+  # conduktor-console: Kafka operations UI (http://localhost:8086)
   conduktor-console:
     image: conduktor/conduktor-console:1.25.0
     hostname: conduktor-console
@@ -460,22 +549,17 @@ services:
     ports:
       - "8086:8080"
     environment:
-      # Database
       CDK_DATABASE_URL: "postgresql://conduktor:conduktor_pass@postgresql:5432/conduktor_platform"
-      # Kafka cluster
       CDK_CLUSTERS_0_ID: local
       CDK_CLUSTERS_0_NAME: "Local Dev Kafka"
       CDK_CLUSTERS_0_BOOTSTRAPSERVERS: broker1:29092,broker2:29092,broker3:29092
       CDK_CLUSTERS_0_COLOR: "#2196f3"
       CDK_CLUSTERS_0_ICON: kafka
-      # Schema Registry
       CDK_CLUSTERS_0_SCHEMAREGISTRY_ID: local-sr
       CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: http://schema-registry:8081
-      # Kafka Connect worker
       CDK_CLUSTERS_0_KAFKACONNECTS_0_ID: local-connect
       CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: local-connect
       CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: http://kafka-connect:8083
-      # Admin credentials — override in production via .env
       CDK_ADMIN_EMAIL: admin@conduktor.io
       CDK_ADMIN_PASSWORD: admin
     depends_on:
@@ -506,16 +590,7 @@ services:
       retries: 3
       start_period: 90s
 
-  # ---------------------------------------------------------------------------
-  # Flink cluster — JobManager + TaskManager
-  #
-  # Web Dashboard : http://localhost:8082
-  #   - Browse running/completed jobs, task graphs, checkpoints, logs
-  #
-  # The custom Flink image (container/flink/Dockerfile) is shared by all three
-  # roles (jobmanager, taskmanager, job-submit) so Python files, JARs, and the
-  # PYTHONPATH are identical on every node.
-  # ---------------------------------------------------------------------------
+  # flink-jobmanager: Flink control plane (http://localhost:8082)
   flink-jobmanager:
     platform: linux/amd64
     build:
@@ -529,7 +604,7 @@ services:
     hostname: flink-jobmanager
     restart: unless-stopped
     ports:
-      - "8082:8081"   # Flink Web Dashboard
+      - "8082:8081"
     environment:
       RUNTIME_ENV: docker
       PYTHONPATH: /opt/flink/usrlib
@@ -568,6 +643,7 @@ services:
           cpus: "0.5"
           memory: 3200M
 
+  # flink-taskmanager: Flink worker plane
   flink-taskmanager:
     platform: linux/amd64
     build:
@@ -606,22 +682,7 @@ services:
           cpus: "1.0"
           memory: 4G
 
-  # ---------------------------------------------------------------------------
-  # flink-runner — generic one-shot job submitter
-  #
-  # Submits a single PyFlink job to the Flink cluster and exits.
-  # The job is selected by the JOB_NAME environment variable.
-  #
-  # Usage (via Makefile):
-  #   make flink-run JOB=appointment        # submit one pipeline
-  #   make flink-submit                     # submit all 14 pipelines
-  #
-  # Available pipelines:
-  #   appointment  article       crewtime    customer   employee
-  #   inventory    kronos_hours  sales_order sales_order_receipt
-  #   site         vehicle       vehicle_inspection
-  #   voucher      work_order
-  # ---------------------------------------------------------------------------
+  # flink-runner: One-shot Flink job submitter
   flink-runner:
     platform: linux/amd64
     build:
@@ -675,13 +736,7 @@ services:
           cpus: "0.5"
           memory: 512M
 
-  #
-  # All Kafka Connect JDBC Sink connectors write into this database.
-  # Database : retail_ops
-  # User     : connect_user / connect_pass  (Kafka Connect)
-  # Root     : root / root_pass             (admin / migrations)
-  # Port     : 3306 (also exposed on host for SQL clients / DBeaver)
-  # ---------------------------------------------------------------------------
+  # mysql: ODS store for sink connectors (retail_ops)
   mysql:
     image: mysql:8.0
     hostname: mysql
@@ -709,8 +764,6 @@ services:
       --sql-mode=
     volumes:
       - mysql_data:/var/lib/mysql
-      # PDM init scripts — executed once in alphabetical order on first start.
-      # Scripts are mounted read-only; MySQL runs them as root on database creation.
       - ../data_platform/ddl:/docker-entrypoint-initdb.d:ro
     deploy:
       resources:
@@ -727,19 +780,7 @@ services:
       retries: 10
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # Kafka Connect — distributed worker with JDBC Sink + MySQL driver
-  #
-  # Custom image  : container/kafka-connect/Dockerfile
-  #   base        : confluentinc/cp-kafka-connect:7.9.8
-  #   + plugin    : confluentinc/kafka-connect-jdbc:10.9.6  (confluent-hub)
-  #   + driver    : mysql-connector-j-8.3.0.jar             (Maven Central)
-  #
-  # REST API      : http://localhost:8083
-  #   GET  /connectors               list all connectors
-  #   GET  /connectors/{name}/status connector health + task state
-  #   GET  /connector-plugins         list available plugins
-  # ---------------------------------------------------------------------------
+  # kafka-connect: Connector runtime (http://localhost:8083)
   kafka-connect:
     build:
       context: ./kafka-connect
@@ -753,7 +794,6 @@ services:
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
       CONNECT_REST_PORT: 8083
       CONNECT_GROUP_ID: retail-ops-connect-cluster
-      # Internal Kafka topics for Connect offset / config / status state
       CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
       CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
       CONNECT_STATUS_STORAGE_TOPIC: _connect-status
@@ -761,14 +801,11 @@ services:
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
-      # Default converters (individual connectors can override per-topic)
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      # Plugin path — includes confluent-hub-installed connectors
       CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
-      # Schema Registry for Avro converters used in canonical connectors
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
       CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
@@ -798,19 +835,7 @@ services:
       retries: 15
       start_period: 60s
 
-  # ---------------------------------------------------------------------------
-  # connect-init — registers all JDBC Sink connectors (one-shot, exits 0)
-  #
-  # CDC connectors (5):
-  #   retail_ops.aurora.retail_ops.*  →  MySQL tables in retail_ops
-  #   insert.mode=upsert, pk=event_id, converter=JSON
-  #
-  # Canonical connectors (15):
-  #   kronos.*, salesforce.*, sap.*, trendwell.*, w*house.*
-  #   insert.mode=upsert, pk=kafka coords, converter=Avro+SchemaRegistry
-  #
-  # Idempotent: connectors that already exist (HTTP 409) are skipped.
-  # ---------------------------------------------------------------------------
+  # connect-init: One-shot JDBC connector registration
   connect-init:
     image: python:3.12-alpine
     restart: "no"
@@ -821,24 +846,13 @@ services:
       - SCHEMA_REGISTRY_URL=http://schema-registry:8081
       - MYSQL_USER=connect_user
       - MYSQL_PASSWORD=connect_pass
-      # Target the PDM database — topic name == table name in retail_ops
       - MYSQL_URL=jdbc:mysql://mysql:3306/retail_ops?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&jdbcCompliantTruncation=false
     depends_on:
       kafka-connect:
         condition: service_healthy
     command: python3 /register_connectors.py
 
-  # ---------------------------------------------------------------------------
-  # cdc-init -- registers the Debezium MySQL source connector (one-shot)
-  #
-  # Captures row-level changes from all retail_ops tables via MySQL binlog
-  # and publishes them to cdc_{table_name} topics in Kafka.
-  #
-  # Topic naming: dbz.retail_ops.<table>  --(RegexRouter)--> cdc_<table>
-  #   e.g.  retail_ops.sales_order  ->  cdc_sales_order
-  #
-  # Idempotent: connector already existing (HTTP 409) is skipped.
-  # ---------------------------------------------------------------------------
+  # cdc-init: One-shot Debezium connector registration
   cdc-init:
     image: python:3.12-alpine
     restart: "no"
@@ -859,13 +873,7 @@ services:
         condition: service_healthy
     command: python3 /register_cdc_connector.py
 
-  # ---------------------------------------------------------------------------
-  # producer — synthetic Avro message generator for all 15 canonical topics
-  #
-  # Produces realistic fake records to Kafka at the rate set by PRODUCE_INTERVAL
-  # (seconds between bursts).  Runs until stopped; restart: unless-stopped keeps
-  # it alive if the brokers briefly disconnect.
-  # ---------------------------------------------------------------------------
+  # producer: Synthetic canonical topic generator
   producer:
     build:
       context: ..
@@ -897,16 +905,7 @@ services:
     profiles:
       - producer
 
-  # ---------------------------------------------------------------------------
-  # autoheal — restarts containers that become unhealthy
-  #
-  # Docker Compose restart policies only trigger on process exit, not on
-  # health status changes.  autoheal watches the Docker socket and calls
-  # `docker restart` whenever a container transitions to "unhealthy".
-  #
-  # AUTOHEAL_CONTAINER_LABEL=conduktor-autoheal limits restarts to containers
-  # that carry the label "autoheal=conduktor-autoheal" (i.e. conduktor-console).
-  # ---------------------------------------------------------------------------
+  # autoheal: Restart unhealthy labeled containers
   autoheal:
     image: willfarrell/autoheal:latest
     restart: unless-stopped
@@ -917,17 +916,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # ---------------------------------------------------------------------------
-  # Airflow — dbt pipeline orchestrator
-  #
-  # Web UI    : http://localhost:8085  (admin / admin)
-  # Executor  : LocalExecutor (single-node; no Celery / Redis needed)
-  # Metadata  : airflow-postgres (dedicated PG instance)
-  # DAGs      : container/airflow/dags/ (bind-mounted)
-  # dbt project: data_platform/dbt/     (bind-mounted at /opt/airflow/dbt)
-  #
-  # Schedule: every 30 min  bronze → silver → gold
-  # ---------------------------------------------------------------------------
+  # airflow-postgres: Airflow metadata database
   airflow-postgres:
     image: postgres:16-alpine
     hostname: airflow-postgres
@@ -950,6 +939,7 @@ services:
           cpus: "0.5"
           memory: 256M
 
+  # airflow-init: One-shot metadata migration and admin bootstrap
   airflow-init:
     <<: *airflow-common
     restart: "no"
@@ -967,11 +957,12 @@ services:
           --password admin
         echo "Airflow initialised"
 
+  # airflow-webserver: Airflow UI/API (http://localhost:8085)
   airflow-webserver:
     <<: *airflow-common
     command: webserver
     ports:
-      - "8085:8080"   # Airflow Web UI
+      - "8085:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -991,6 +982,7 @@ services:
           cpus: "0.5"
           memory: 1G
 
+  # airflow-scheduler: Airflow scheduler process
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -1013,26 +1005,14 @@ services:
           cpus: "1.0"
           memory: 1G
 
-  # ---------------------------------------------------------------------------
-  # Analytics layer — downstream of gold Iceberg tables
-  #
-  # Components:
-  #   qdrant        : vector database for AI semantic search
-  #   feast-server  : online feature store server (serves features from Redis)
-  #   vector-indexer: one-shot job that builds Qdrant indexes from gold layer
-  # ---------------------------------------------------------------------------
-
-  # ── Qdrant vector database ──────────────────────────────────────────────
-  # REST API  : http://localhost:6333
-  # gRPC      : localhost:6334
-  # Dashboard : http://localhost:6333/dashboard
+  # qdrant: Vector database (http://localhost:6333)
   qdrant:
     image: qdrant/qdrant:v1.9.2
     hostname: qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"   # REST + Dashboard
-      - "6334:6334"   # gRPC
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
@@ -1050,25 +1030,23 @@ services:
           cpus: "0.5"
           memory: 512M
 
-  # ── Feast online feature server ─────────────────────────────────────────
-  # REST endpoint: http://localhost:6566/get-online-features
+  # feast-server: Online feature service (http://localhost:6566)
   feast-server:
-    image: python:3.12-slim
+    build:
+      context: ..
+      dockerfile: container/feature-store/Dockerfile
     hostname: feast-server
     restart: unless-stopped
-    working_dir: /feature_store
-    command:
-      - bash
-      - -c
-      - |
-        pip install --quiet feast[spark,redis,aws]==0.40.0 && \
-        feast -c /feature_store serve --host 0.0.0.0 --port 6566
     ports:
-      - "6566:6566"   # Feast online feature server
-    volumes:
-      - ../data_platform/feature_store:/feature_store:ro
+      - "6566:6566"
     environment:
       FEAST_USAGE: "False"
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_ENDPOINT_URL_S3: http://minio:9000
+      AWS_S3_ADDRESSING_STYLE: path
     depends_on:
       redis:
         condition: service_healthy
@@ -1084,35 +1062,23 @@ services:
           cpus: "0.5"
           memory: 512M
 
-  # ── Vector indexer (one-shot) ────────────────────────────────────────────
-  # Reads gold Iceberg tables, generates embeddings, upserts into Qdrant.
-  # restart: on-failure retries if Qdrant or Spark Thrift isn't ready yet.
+  # vector-indexer: One-shot embedding index builder
   vector-indexer:
-    image: python:3.12-slim
+    build:
+      context: ..
+      dockerfile: container/vector-index/Dockerfile
     hostname: vector-indexer
     restart: "no"
-    working_dir: /app
-    command:
-      - bash
-      - -c
-      - |
-        pip install --quiet \
-            qdrant-client==1.9.0 \
-            sentence-transformers==2.7.0 \
-            pyhive[hive]==0.7.0 \
-            thrift==0.20.0 && \
-        python /app/indexer.py
-    volumes:
-      - ../data_platform/vector_index/indexer.py:/app/indexer.py:ro
     environment:
       QDRANT_HOST:       qdrant
       QDRANT_PORT:       "6333"
       SPARK_THRIFT_HOST: spark-thriftserver
       SPARK_THRIFT_PORT: "10000"
       EMBEDDING_MODEL:   sentence-transformers/all-MiniLM-L6-v2
+      KPI_SOURCE_TABLES: warehouse/gold_store_kpis,iceberg.gold.gold_store_kpis
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
       spark-thriftserver:
         condition: service_healthy
     deploy:
@@ -1121,25 +1087,15 @@ services:
           cpus: "1.0"
           memory: 2G
 
-  # ---------------------------------------------------------------------------
-  # MinIO — S3-compatible object storage
-  #
-  # Buckets (created by minio-init):
-  #   landing    Raw CDC events from Spark Structured Streaming (Iceberg append)
-  #   warehouse  Iceberg table data (bronze / silver / gold)
-  #   checkpoints Spark Streaming checkpoint state
-  #
-  # S3 API   : http://localhost:9000  (internal: http://minio:9000)
-  # Console  : http://localhost:9001  (user: minioadmin / minioadmin)
-  # ---------------------------------------------------------------------------
+  # minio: Object store for lakehouse data (http://localhost:9000/9001)
   minio:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     hostname: minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web console
+      - "9000:9000"
+      - "9001:9001"
     environment:
       MINIO_ROOT_USER:     minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -1157,6 +1113,7 @@ services:
           cpus: "0.5"
           memory: 512M
 
+  # minio-init: One-shot bucket bootstrap
   minio-init:
     image: minio/mc:RELEASE.2025-07-21T05-28-08Z
     restart: "no"
@@ -1172,12 +1129,7 @@ services:
         echo 'MinIO buckets ready: landing, warehouse, checkpoints'
       "
 
-  # ---------------------------------------------------------------------------
-  # Iceberg REST Catalog
-  #
-  # REST endpoint : http://localhost:8181  (internal: http://iceberg-rest:8181)
-  # Warehouse     : s3://landing/  (backed by MinIO)
-  # ---------------------------------------------------------------------------
+  # iceberg-rest: Iceberg catalog API (http://localhost:8181)
   iceberg-rest:
     image: tabulario/iceberg-rest:1.6.0
     hostname: iceberg-rest
@@ -1209,10 +1161,7 @@ services:
           cpus: "0.5"
           memory: 512M
 
-  # ---------------------------------------------------------------------------
-  # Iceberg namespace bootstrap (one-shot)
-  # Ensures required namespaces exist after fresh volume resets.
-  # ---------------------------------------------------------------------------
+  # iceberg-init: One-shot namespace bootstrap
   iceberg-init:
     image: python:3.12-slim
     hostname: iceberg-init
@@ -1249,20 +1198,15 @@ services:
                     raise
         PY
 
-  # ---------------------------------------------------------------------------
-  # Spark standalone cluster (master + worker) with Iceberg extensions
-  #
-  # Spark Master Web UI : http://localhost:4040
-  # Spark Thrift Server : jdbc:hive2://localhost:10000  (for dbt-spark)
-  # ---------------------------------------------------------------------------
+  # spark-master: Spark compute control plane (http://localhost:4040)
   spark-master:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-master
     restart: unless-stopped
     command: ["spark-master"]
     ports:
-      - "4040:8080"    # Spark Master Web UI
-      - "7077:7077"    # Spark master RPC
+      - "4040:8080"
+      - "7077:7077"
     environment:
       SPARK_NO_DAEMONIZE: "true"
       AWS_ACCESS_KEY_ID:     minioadmin
@@ -1283,6 +1227,7 @@ services:
           cpus: "1.0"
           memory: 1G
 
+  # spark-worker: Spark compute worker node 1
   spark-worker:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker
@@ -1309,6 +1254,7 @@ services:
           cpus: "2.0"
           memory: 3G
 
+  # spark-worker-2: Spark compute worker node 2
   spark-worker-2:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker-2
@@ -1335,6 +1281,7 @@ services:
           cpus: "2.0"
           memory: 3G
 
+  # spark-worker-3: Spark compute worker node 3
   spark-worker-3:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker-3
@@ -1361,17 +1308,15 @@ services:
           cpus: "2.0"
           memory: 3G
 
-  # ---------------------------------------------------------------------------
-  # Dedicated Spark SQL cluster (master + worker) for Thrift/dbt workloads
-  # ---------------------------------------------------------------------------
+  # spark-master-sql: Spark SQL control plane (http://localhost:4041)
   spark-master-sql:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-master-sql
     restart: unless-stopped
     command: ["spark-master"]
     ports:
-      - "4041:8080"    # Spark SQL Master Web UI
-      - "7078:7077"    # Spark SQL master RPC
+      - "4041:8080"
+      - "7078:7077"
     environment:
       SPARK_NO_DAEMONIZE: "true"
       AWS_ACCESS_KEY_ID:     minioadmin
@@ -1392,6 +1337,7 @@ services:
           cpus: "0.5"
           memory: 1G
 
+  # spark-worker-sql: Spark SQL worker node 1
   spark-worker-sql:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker-sql
@@ -1418,6 +1364,7 @@ services:
           cpus: "2.0"
           memory: 3G
 
+  # spark-worker-sql-2: Spark SQL worker node 2
   spark-worker-sql-2:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-worker-sql-2
@@ -1444,18 +1391,11 @@ services:
           cpus: "2.0"
           memory: 3G
 
-  # ---------------------------------------------------------------------------
-  # Spark Thrift Server — HiveServer2-compatible JDBC endpoint for dbt-spark
-  #
-  # JDBC : jdbc:hive2://localhost:10000
-  # ---------------------------------------------------------------------------
+  # spark-thriftserver: JDBC endpoint for dbt-spark (localhost:10000)
   spark-thriftserver:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-thriftserver
     restart: unless-stopped
-    # Keep bash + command as a single script string.
-    # If YAML tokenizes this into multiple args, bash -c runs only the first token,
-    # start-thriftserver exits immediately, and the container enters a restart loop.
     entrypoint: ["/bin/bash", "-lc"]
     command:
       - >
@@ -1480,7 +1420,7 @@ services:
         --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
         exec tail -F /opt/spark/logs/spark-*.out
     ports:
-      - "10000:10000"   # Thrift JDBC
+      - "10000:10000"
     environment:
       AWS_ACCESS_KEY_ID:     minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
@@ -1508,12 +1448,7 @@ services:
           cpus: "1.0"
           memory: 2G
 
-  # ---------------------------------------------------------------------------
-  # Spark CDC Streaming — reads CDC Kafka topics, sinks to MinIO landing (Iceberg)
-  #
-  # Submits cdc_to_landing.py to the Spark cluster and blocks until terminated.
-  # restart: unless-stopped keeps the streaming job alive after broker restarts.
-  # ---------------------------------------------------------------------------
+  # spark-cdc-streaming: CDC ingestion to Iceberg landing
   spark-cdc-streaming:
     image: tabulario/spark-iceberg:3.5.1_1.5.0
     hostname: spark-cdc-streaming
@@ -1582,13 +1517,7 @@ services:
           cpus: "1.0"
           memory: 2G
 
-  # ---------------------------------------------------------------------------
-  # dbt-spark — runs dbt transformations (bronze / silver / gold) against the
-  # Spark Thrift Server.
-  #
-  # Default command: `dbt run` (all layers)
-  # Override via: make dbt-run LAYER=silver
-  # ---------------------------------------------------------------------------
+  # dbt-runner: One-shot dbt execution against Spark Thrift
   dbt-runner:
     image: ghcr.io/dbt-labs/dbt-spark:1.8.latest
     platform: linux/amd64
@@ -1597,7 +1526,7 @@ services:
     working_dir: /usr/app/dbt
     command: ["dbt", "run", "--profiles-dir", "/usr/app/dbt", "--project-dir", "/usr/app/dbt"]
     volumes:
-      - ../data_platform/dbt:/usr/app/dbt:ro
+      - ../data_platform/dbt:/usr/app/dbt
     environment:
       DBT_PROFILES_DIR: /usr/app/dbt
     depends_on:
@@ -1620,5 +1549,7 @@ volumes:
   airflow_postgres_data:
   airflow_logs:
   qdrant_data:
+  grafana_data:
+  neo4j_data:
 
 

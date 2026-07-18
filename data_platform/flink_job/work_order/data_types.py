@@ -1,3 +1,5 @@
+"""Module for data types."""
+
 from pyflink.table import DataTypes
 
 

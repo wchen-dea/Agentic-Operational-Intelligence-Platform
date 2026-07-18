@@ -1,3 +1,5 @@
+"""Module for table functions."""
+
 import random, string
 from pyflink.table import DataTypes
 from pyflink.table.udf import udtf

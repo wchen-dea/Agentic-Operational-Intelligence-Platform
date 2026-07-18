@@ -15,7 +15,7 @@ LOCAL_MYSQL_URL           := jdbc:mysql://mysql:3306/retail_ops?useSSL=false&all
 DDL_DIR                   := data_platform/ddl
 
 # Core local development services (fast startup, excludes heavy optional stacks).
-CORE_SERVICES := app redis mysql broker1 broker2 broker3 schema-registry kafka-connect
+CORE_SERVICES := app redis mysql neo4j broker1 broker2 broker3 schema-registry kafka-connect
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 BOLD  := \033[1m
@@ -27,11 +27,11 @@ CYAN  := \033[36m
 .PHONY: help
 help:
 	@printf "$(BOLD)Agentic Operational Intelligence Platform (local development)$(RESET)\n\n"
-	@printf "$(CYAN)Setup$(RESET)\n"
+	@printf "$(CYAN)Platform Setup$(RESET)\n"
 	@printf "  %-28s %s\n" "make install"           "Create .venv and install all dependency groups"
 	@printf "  %-28s %s\n" "make install-streaming" "Install streaming extras (confluent-kafka, fastavro …)"
 	@printf "  %-28s %s\n" "make env"               "Copy .env.example → .env (edit afterwards)"
-	@printf "\n$(CYAN)Docker stack$(RESET)\n"
+	@printf "\n$(CYAN)Container Stack$(RESET)\n"
 	@printf "  %-28s %s\n" "make up"                "Start core local services only (app + kafka + mysql + redis)"
 	@printf "  %-28s %s\n" "make up-full"           "Start full stack (includes Airflow/Flink/lakehouse/analytics)"
 	@printf "  %-28s %s\n" "make down"              "Stop and remove all containers"
@@ -40,8 +40,13 @@ help:
 	@printf "  %-28s %s\n" "make rebuild"           "Force-rebuild images and restart"
 	@printf "  %-28s %s\n" "make ps"                "Show container status"
 	@printf "  %-28s %s\n" "make logs"              "Tail logs for all services (Ctrl-C to exit)"
-	@printf "  %-28s %s\n" "make logs-app"          "Tail app service logs"
-	@printf "\n$(CYAN)Kafka / Schemas$(RESET)\n"
+	@printf "\n$(CYAN)AI Systems (Gateway)$(RESET)\n"
+	@printf "  %-28s %s\n" "make dev"               "Run the FastAPI app locally with hot-reload"
+	@printf "  %-28s %s\n" "make mcp"               "Run the MCP server locally"
+	@printf "  %-28s %s\n" "make webui-up"          "Start Streamlit WebUI (Docker)"
+	@printf "  %-28s %s\n" "make webui-down"        "Stop Streamlit WebUI"
+	@printf "  %-28s %s\n" "make webui-open"        "Print Streamlit WebUI URL"
+	@printf "\n$(CYAN)Data Platform (Kafka + DDL + Producer)$(RESET)\n"
 	@printf "  %-28s %s\n" "make register-schemas"  "Register all Avro schemas into Schema Registry"
 	@printf "  %-28s %s\n" "make register-connectors" "Register JDBC Sink connectors for PDM tables"
 	@printf "  %-28s %s\n" "make register-cdc"      "Register the CDC (Debezium) connector"
@@ -51,17 +56,7 @@ help:
 	@printf "  %-28s %s\n" "make produce-stop"      "Stop the producer service"
 	@printf "  %-28s %s\n" "make logs-producer"     "Tail producer logs"
 	@printf "  %-28s %s\n" "make topics"            "List all Kafka topics"
-	@printf "\n$(CYAN)App$(RESET)\n"
-	@printf "  %-28s %s\n" "make dev"               "Run the FastAPI app locally with hot-reload"
-	@printf "  %-28s %s\n" "make mcp"               "Run the MCP server locally"
-	@printf "\n$(CYAN)Quality$(RESET)\n"
-	@printf "  %-28s %s\n" "make test"              "Run the test suite"
-	@printf "  %-28s %s\n" "make test-cov"          "Run tests with coverage report"
-	@printf "  %-28s %s\n" "make lint"              "Ruff lint check"
-	@printf "  %-28s %s\n" "make fmt"               "Ruff auto-format"
-	@printf "  %-28s %s\n" "make typecheck"         "Pyright type check"
-	@printf "  %-28s %s\n" "make clean-producer"    "Remove producer __pycache__/pyc artifacts"
-	@printf "\n$(CYAN)Flink$(RESET)\n"
+	@printf "\n$(CYAN)Data Platform (Flink Streaming)$(RESET)\n"
 	@printf "  %-28s %s\n" "make flink-jar"         "Build connector fat JAR with Maven (required before flink-up)"
 	@printf "  %-28s %s\n" "make flink-up"          "Build and start JobManager + TaskManager"
 	@printf "  %-28s %s\n" "make flink-refresh"     "Force-recreate Flink services to pick up compose/env changes"
@@ -71,8 +66,48 @@ help:
 	@printf "  %-28s %s\n" "make flink-down"        "Stop Flink cluster"
 	@printf "  %-28s %s\n" "make flink-jobs"        "List running Flink jobs via REST API"
 	@printf "  %-28s %s\n" "make flink-pipelines"   "List available pipeline names"
+	@printf "  %-28s %s\n" "make flink-open"        "Open Flink dashboard over HTTP (127.0.0.1)"
+	@printf "  %-28s %s\n" "make flink-open-localhost" "Open localhost dashboard and warn on HTTPS upgrade"
+	@printf "\n$(CYAN)Lakehouse (Spark + Iceberg + dbt)$(RESET)\n"
+	@printf "  %-28s %s\n" "make lake-up"           "Start lakehouse services (MinIO + Iceberg + Spark)"
+	@printf "  %-28s %s\n" "make lake-stream"       "Start Spark CDC streaming worker"
+	@printf "  %-28s %s\n" "make lake-down"         "Stop lakehouse services"
+	@printf "  %-28s %s\n" "make dbt-deps"          "Install dbt packages in the dbt runner"
+	@printf "  %-28s %s\n" "make dbt-run [LAYER=...]" "Run dbt models (optionally select layer)"
+	@printf "  %-28s %s\n" "make dbt-test"          "Run dbt tests"
+	@printf "  %-28s %s\n" "make minio-ui"          "Print MinIO UI endpoint and credentials"
+	@printf "\n$(CYAN)Orchestration (Airflow)$(RESET)\n"
+	@printf "  %-28s %s\n" "make airflow-up"        "Start Airflow and initialize metadata DB"
+	@printf "  %-28s %s\n" "make airflow-down"      "Stop Airflow services"
+	@printf "  %-28s %s\n" "make airflow-open"      "Open Airflow login over HTTP (avoids HTTPS-first browser upgrades)"
+	@printf "  %-28s %s\n" "make airflow-open-localhost" "Open localhost URL and warn if browser upgrades to HTTPS"
+	@printf "  %-28s %s\n" "make airflow-trigger"   "Trigger dbt_lakehouse_pipeline DAG"
+	@printf "\n$(CYAN)Analytics (Feature + Vector)$(RESET)\n"
+	@printf "  %-28s %s\n" "make analytics-up"      "Start Qdrant and Feast services"
+	@printf "  %-28s %s\n" "make analytics-materialize" "Run Feast apply + materialization"
+	@printf "  %-28s %s\n" "make analytics-index"   "Build/start vector indexer"
+	@printf "  %-28s %s\n" "make analytics-index-dry" "Run vector indexing in dry-run mode"
+	@printf "  %-28s %s\n" "make analytics-down"    "Stop analytics services"
+	@printf "\n$(CYAN)Graph (Neo4j Relationships)$(RESET)\n"
+	@printf "  %-28s %s\n" "make graph-up"          "Start Neo4j graph database"
+	@printf "  %-28s %s\n" "make graph-sync"        "Sync ODS relationships + gold KPI snapshots to Neo4j"
+	@printf "  %-28s %s\n" "make graph-check"       "Show Neo4j relationship counts by type"
+	@printf "  %-28s %s\n" "make graph-down"        "Stop Neo4j graph database"
+	@printf "\n$(CYAN)Observability / Logs$(RESET)\n"
+	@printf "  %-28s %s\n" "make logs-app"          "Tail app service logs"
 	@printf "  %-28s %s\n" "make logs-flink-jm"     "Tail JobManager logs"
 	@printf "  %-28s %s\n" "make logs-flink-tm"     "Tail TaskManager logs"
+	@printf "  %-28s %s\n" "make logs-airflow"      "Tail Airflow scheduler and webserver logs"
+	@printf "  %-28s %s\n" "make logs-conduktor"    "Tail Conduktor console logs"
+	@printf "  %-28s %s\n" "make conduktor-health"  "Check Conduktor health endpoint"
+	@printf "  %-28s %s\n" "make conduktor-restart" "Restart Conduktor console container"
+	@printf "\n$(CYAN)Quality$(RESET)\n"
+	@printf "  %-28s %s\n" "make test"              "Run the test suite"
+	@printf "  %-28s %s\n" "make test-cov"          "Run tests with coverage report"
+	@printf "  %-28s %s\n" "make lint"              "Ruff lint check"
+	@printf "  %-28s %s\n" "make fmt"               "Ruff auto-format"
+	@printf "  %-28s %s\n" "make typecheck"         "Pyright type check"
+	@printf "  %-28s %s\n" "make clean-producer"    "Remove producer __pycache__/pyc artifacts"
 	@printf "\n$(CYAN)Note$(RESET)\n"
 	@printf "  %-28s %s\n" "make help-full"         "Show all available targets"
 
@@ -158,7 +193,7 @@ logs-app:
 logs-conduktor:
 	$(COMPOSE) logs -f conduktor-console
 
-# ── Kafka / Schemas ───────────────────────────────────────────────────────────
+# ── Data Platform (Kafka / Schemas / DDL / Producer) ─────────────────────────
 .PHONY: register-schemas
 register-schemas:
 	SCHEMA_REGISTRY_URL="$(LOCAL_SCHEMA_REGISTRY_URL)" \
@@ -234,7 +269,7 @@ ddl-status:
 	@echo "Current table count in retail_ops:"
 	@$(COMPOSE) exec -T mysql mysql -uroot -proot_pass -e "SELECT table_schema, COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema = 'retail_ops' GROUP BY table_schema;"
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# ── AI Systems (Gateway) ──────────────────────────────────────────────────────
 .PHONY: dev
 dev:
 	$(PYTHON) -m uvicorn ai_systems.gateway.api.app:app --reload --host 0.0.0.0 --port 8000
@@ -242,6 +277,18 @@ dev:
 .PHONY: mcp
 mcp:
 	$(PYTHON) ai_systems/gateway/mcp/server.py
+
+.PHONY: webui-up
+webui-up:
+	$(COMPOSE) up -d webui
+
+.PHONY: webui-down
+webui-down:
+	$(COMPOSE) stop webui
+
+.PHONY: webui-open
+webui-open:
+	@echo "Streamlit WebUI: http://localhost:8501"
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 .PHONY: test
@@ -269,7 +316,7 @@ clean-producer:
 	find data_platform/producer -type d -name '__pycache__' -prune -exec rm -rf {} +
 	find data_platform/producer -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
-# ── Flink cluster ─────────────────────────────────────────────────────────────
+# ── Data Platform (Flink Streaming) ───────────────────────────────────────────
 FLINK_PIPELINES := appointment article crewtime customer employee \
                    inventory kronos_hours sales_order sales_order_receipt \
                    site vehicle vehicle_inspection voucher work_order
@@ -364,6 +411,20 @@ flink-pipelines:
 	@echo "Available pipelines:"
 	@for job in $(FLINK_PIPELINES); do echo "  $$job"; done
 
+.PHONY: flink-open
+flink-open:
+	@echo "Opening Flink Dashboard: http://127.0.0.1:8082/"
+	@open "http://127.0.0.1:8082/"
+
+.PHONY: flink-open-localhost
+flink-open-localhost:
+	@if ! curl -k -sf --max-time 3 https://localhost:8082/ >/dev/null 2>&1; then \
+		echo "Warning: https://localhost:8082 is not served by Flink (HTTP only)."; \
+		echo "If your browser upgrades localhost to HTTPS, disable HTTPS-first for localhost."; \
+	fi
+	@echo "Opening Flink Dashboard: http://localhost:8082/"
+	@open "http://localhost:8082/"
+
 .PHONY: logs-flink-jm
 logs-flink-jm:
 	$(COMPOSE) logs -f flink-jobmanager
@@ -372,7 +433,7 @@ logs-flink-jm:
 logs-flink-tm:
 	$(COMPOSE) logs -f flink-taskmanager
 
-# ── Conduktor helpers ─────────────────────────────────────────────────────────
+# ── Observability (Conduktor helpers) ─────────────────────────────────────────
 .PHONY: conduktor-restart
 conduktor-restart:
 	docker restart $$(docker ps -qf name=conduktor-console)
@@ -382,7 +443,7 @@ conduktor-health:
 	curl -sf --max-time 5 --noproxy '*' http://localhost:8086/api/health \
 		&& echo "$(GREEN)healthy$(RESET)" || echo "unhealthy"
 
-# ── Lakehouse (Spark + Iceberg + dbt) ────────────────────────────────────────
+# ── Data Platform (Lakehouse: Spark + Iceberg + dbt) ─────────────────────────
 .PHONY: lake-up
 lake-up: _require-env
 	$(COMPOSE) up -d minio minio-init iceberg-rest spark-master spark-worker spark-thriftserver
@@ -402,29 +463,29 @@ lake-down:
 .PHONY: dbt-run
 dbt-run: _require-env
 	@if [ -z "$(LAYER)" ]; then \
-		$(COMPOSE) run --rm dbt-runner dbt run \
+		$(COMPOSE) run --rm dbt-runner run \
 			--profiles-dir /usr/app/dbt --project-dir /usr/app/dbt; \
 	else \
-		$(COMPOSE) run --rm dbt-runner dbt run \
+		$(COMPOSE) run --rm dbt-runner run \
 			--profiles-dir /usr/app/dbt --project-dir /usr/app/dbt \
 			--select $(LAYER); \
 	fi
 
 .PHONY: dbt-test
 dbt-test: _require-env
-	$(COMPOSE) run --rm dbt-runner dbt test \
+	$(COMPOSE) run --rm dbt-runner test \
 		--profiles-dir /usr/app/dbt --project-dir /usr/app/dbt
 
 .PHONY: dbt-deps
 dbt-deps: _require-env
-	$(COMPOSE) run --rm dbt-runner dbt deps \
+	$(COMPOSE) run --rm dbt-runner deps \
 		--profiles-dir /usr/app/dbt --project-dir /usr/app/dbt
 
 .PHONY: minio-ui
 minio-ui:
 	@echo "MinIO console: http://localhost:9001  (user: minioadmin / minioadmin)"
 
-# ── Airflow ───────────────────────────────────────────────────────────────────
+# ── Orchestration (Airflow) ───────────────────────────────────────────────────
 .PHONY: airflow-up
 airflow-up: _require-env
 	$(COMPOSE) up -d airflow-postgres
@@ -436,6 +497,20 @@ airflow-up: _require-env
 airflow-down:
 	$(COMPOSE) stop airflow-webserver airflow-scheduler airflow-postgres 2>/dev/null || true
 
+.PHONY: airflow-open
+airflow-open:
+	@echo "Opening Airflow UI: http://127.0.0.1:8085/login/"
+	@open "http://127.0.0.1:8085/login/"
+
+.PHONY: airflow-open-localhost
+airflow-open-localhost:
+	@if ! curl -k -sf --max-time 3 https://localhost:8085/ >/dev/null 2>&1; then \
+		echo "Warning: https://localhost:8085 is not served by Airflow (HTTP only)."; \
+		echo "If your browser upgrades localhost to HTTPS, disable HTTPS-first for localhost."; \
+	fi
+	@echo "Opening Airflow UI: http://localhost:8085/login/"
+	@open "http://localhost:8085/login/"
+
 .PHONY: airflow-trigger
 airflow-trigger:
 	$(COMPOSE) exec airflow-scheduler \
@@ -445,7 +520,7 @@ airflow-trigger:
 logs-airflow:
 	$(COMPOSE) logs -f airflow-scheduler airflow-webserver
 
-# ── Analytics layer (Feature Store + Semantic Layer + Vector Index) ───────────
+# ── Analytics layer (Feature Store + Semantic Layer + Vector Index) ──────────
 .PHONY: analytics-up
 analytics-up: _require-env
 	$(COMPOSE) up -d qdrant feast-server
@@ -454,11 +529,17 @@ analytics-up: _require-env
 
 .PHONY: analytics-materialize
 analytics-materialize: _require-env
-	$(COMPOSE) run --rm -v $(PWD)/data_platform/feature_store:/feature_store \
+	$(COMPOSE) run --rm \
+		-e AWS_ACCESS_KEY_ID=minioadmin \
+		-e AWS_SECRET_ACCESS_KEY=minioadmin \
+		-e AWS_REGION=us-east-1 \
+		-e AWS_DEFAULT_REGION=us-east-1 \
+		-e AWS_ENDPOINT_URL=http://minio:9000 \
+		-e AWS_ENDPOINT_URL_S3=http://minio:9000 \
+		-e AWS_S3_ADDRESSING_STYLE=path \
+		-v $(PWD)/data_platform/feature_store:/feature_store \
 		feast-server bash -c \
-		"pip install -q feast[spark,redis]==0.40.0 && \
-		 cd /feature_store && feast apply && \
-		 python materialize.py"
+		"cd /feature_store && feast apply --skip-source-validation && python materialize.py"
 
 .PHONY: analytics-index
 analytics-index: _require-env
@@ -474,6 +555,28 @@ analytics-index-dry:
 .PHONY: analytics-down
 analytics-down:
 	$(COMPOSE) stop qdrant feast-server vector-indexer 2>/dev/null || true
+
+.PHONY: graph-up
+graph-up:
+	$(COMPOSE) up -d neo4j
+
+.PHONY: graph-sync
+graph-sync:
+	$(COMPOSE) run --build --rm app /bin/bash -lc \
+		"/app/.venv/bin/python data_platform/graph/sync_relationships.py && /app/.venv/bin/python data_platform/graph/sync_gold_kpis.py"
+
+.PHONY: graph-check
+graph-check:
+	$(COMPOSE) up -d neo4j
+	$(COMPOSE) exec neo4j cypher-shell -u neo4j -p neo4j \
+		"MATCH ()-[r]->() \
+		 WHERE type(r) IN ['AVAILABLE_AT','WORKS_AT','VISITS','HAS_KPI_SNAPSHOT'] \
+		 RETURN type(r) AS relationship_type, count(r) AS relationship_count \
+		 ORDER BY relationship_type"
+
+.PHONY: graph-down
+graph-down:
+	$(COMPOSE) stop neo4j 2>/dev/null || true
 
 # ── Internal guards ───────────────────────────────────────────────────────────
 .PHONY: _require-env

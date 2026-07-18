@@ -1,8 +1,9 @@
 # AI Systems Architecture
 
 The AI layer reads from two sources in parallel:
+
 - **Real-time path** — MySQL ODS directly (Stage 4 of the data pipeline)
-- **Lakehouse path** — Iceberg gold/analytics + Qdrant + Feast (Stages 7–8)
+- **Lakehouse path** — Iceberg gold/analytics + Qdrant + Feast + Neo4j (Stages 7–9)
 
 ## Component overview
 
@@ -13,6 +14,7 @@ graph TB
         GOLD["iceberg.gold.gold_store_kpis\nlakehouse path"]
         FEAST["Feast :6566\nML online features (Redis)"]
         QDRANT["Qdrant :6333\nvector embeddings"]
+        NEO4J["Neo4j :7474/:7687\nrelationship graph"]
         SEMLAY["MetricFlow\nsemantic layer metrics"]
     end
 
@@ -67,6 +69,7 @@ graph TB
     GOLD --> REST
     FEAST -->|"online features"| REST
     QDRANT -->|"semantic search"| SK3
+    NEO4J -->|"relationship graph context"| REST
     SEMLAY --> REST
 
     REST --> INJ --> PII --> IR
@@ -140,29 +143,30 @@ sequenceDiagram
 
 ## Intent → agent subgraph mapping
 
-| Intent | Triggered agents | API endpoints |
-|--------|-----------------|--------------|
-| `kpi_query` | kpi, rag_search | `/kpi`, `/kpi/enriched` |
-| `anomaly_check` | kpi, anomaly, rag_search | `/alerts/{store_id}` |
-| `promotion_analysis` | kpi, anomaly, promotion, rag_search | — |
-| `operational_brief` | kpi, anomaly, promotion, recommendation, rag_search | `/operations/brief` |
-| `general_qa` | all | `/ask`, `/ask/agentic` |
+| Intent               | Triggered agents                                    | API endpoints           |
+| -------------------- | --------------------------------------------------- | ----------------------- |
+| `kpi_query`          | kpi, rag_search                                     | `/kpi`, `/kpi/enriched` |
+| `anomaly_check`      | kpi, anomaly, rag_search                            | `/alerts/{store_id}`    |
+| `promotion_analysis` | kpi, anomaly, promotion, rag_search                 | —                       |
+| `operational_brief`  | kpi, anomaly, promotion, recommendation, rag_search | `/operations/brief`     |
+| `general_qa`         | all                                                 | `/ask`, `/ask/agentic`  |
 
 ## Production AI stack
 
-| Layer | Role | Implementation |
-|-------|------|---------------|
-| **LLM** | Natural-language generation, intent classification, diagnosis | Anthropic Claude (`claude-sonnet-4`) · `ModelRouter` (Haiku → Sonnet → Opus) · `ai_systems/core/llm.py` |
-| **Vector Database** | Semantic search over operational knowledge corpus | ChromaDB (persistent) + TF-IDF (sparse) with reciprocal rank fusion · `ai_systems/retrieval/` |
-| **Long-term AI search** | KPI narrative search, metric definition lookup | Qdrant `store_kpi_narratives` + `metric_definitions` · `data_platform/vector_index/` |
-| **Feature serving** | Low-latency ML feature retrieval for inference | Feast online store (Redis) · `data_platform/feature_store/` |
-| **Semantic metrics** | Dimension-aware business metric queries | dbt MetricFlow 9 named metrics · `data_platform/dbt/models/semantic/` |
-| **Orchestration** | DAG-based agent execution with intent routing | `ai_systems/orchestration/` — dag, router, executor |
-| **Skills** | Composable LLM tool-calling capabilities | `ai_systems/skills.py` + `ai_systems/tools/` — Skill ABC, catalog, and invocation loop |
-| **Guardrails** | Input validation, output quality enforcement | `ai_systems/core/guardrails.py` |
-| **Memory** | Multi-turn session coherence | `ai_systems/retrieval/memory.py` (SQLite) |
-| **Prompts** | Versioned, A/B-tested prompt templates | `ai_systems/core/prompts.py` — PromptRegistry + ExperimentManager |
-| **Structured output** | Typed, validated LLM responses | `ai_systems/core/structured_output.py` — Pydantic models |
+| Layer                   | Role                                                          | Implementation                                                                                          |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **LLM**                 | Natural-language generation, intent classification, diagnosis | Anthropic Claude (`claude-sonnet-4`) · `ModelRouter` (Haiku → Sonnet → Opus) · `ai_systems/core/llm.py` |
+| **Vector Database**     | Semantic search over operational knowledge corpus             | ChromaDB (persistent) + TF-IDF (sparse) with reciprocal rank fusion · `ai_systems/retrieval/`           |
+| **Long-term AI search** | KPI narrative search, metric definition lookup                | Qdrant `store_kpi_narratives` + `metric_definitions` · `data_platform/vector_index/`                    |
+| **Feature serving**     | Low-latency ML feature retrieval for inference                | Feast online store (Redis) · `data_platform/feature_store/`                                             |
+| **Graph context**       | Store relationship traversal and KPI snapshot graph lookups   | Neo4j (`AVAILABLE_AT`/`WORKS_AT`/`VISITS`/`HAS_KPI_SNAPSHOT`) · `data_platform/graph/`                 |
+| **Semantic metrics**    | Dimension-aware business metric queries                       | dbt MetricFlow 9 named metrics · `data_platform/dbt/models/semantic/`                                   |
+| **Orchestration**       | DAG-based agent execution with intent routing                 | `ai_systems/orchestration/` — dag, router, executor                                                     |
+| **Skills**              | Composable LLM tool-calling capabilities                      | `ai_systems/skills.py` + `ai_systems/tools/` — Skill ABC, catalog, and invocation loop                  |
+| **Guardrails**          | Input validation, output quality enforcement                  | `ai_systems/core/guardrails.py`                                                                         |
+| **Memory**              | Multi-turn session coherence                                  | `ai_systems/retrieval/memory.py` (SQLite)                                                               |
+| **Prompts**             | Versioned, A/B-tested prompt templates                        | `ai_systems/core/prompts.py` — PromptRegistry + ExperimentManager                                       |
+| **Structured output**   | Typed, validated LLM responses                                | `ai_systems/core/structured_output.py` — Pydantic models                                                |
 
 ## Design principle
 
@@ -199,31 +203,39 @@ graph LR
 
 ## API endpoints
 
-| Endpoint | Method | Description | Auth role |
-|----------|--------|-------------|-----------|
-| `/ask` | POST | Agentic Q&A — guardrails → intent routing → DAG execution | operator |
-| `/ask/stream` | POST | SSE streaming Q&A | operator |
-| `/ask/async` | POST | Non-blocking async generation | operator |
-| `/ask/agentic` | POST | Tool-calling queries with skill invocation | operator |
-| `/kpi` | POST | Fetch KPIs for a store or region | viewer |
-| `/kpi/enriched` | POST | KPIs with semantic metadata and anomaly flags | viewer |
-| `/kpi/catalog` | GET | Machine-readable KPI catalog (16 definitions) | viewer |
-| `/alerts/{store_id}` | GET | Active alerts for a store | viewer |
-| `/operations/brief` | POST | Persona-aware operational brief | operator |
-| `/skills` | GET | List all agent skills with tool schemas | operator |
-| `/skills/{name}/invoke` | POST | Invoke a skill by name | operator |
-| `/usage` | GET | LLM token usage and session cost | admin |
-| `/metrics` | GET | Prometheus exposition format | admin |
-| `/health` | GET | Health check | public |
+| Endpoint                | Method | Description                                               | Auth role |
+| ----------------------- | ------ | --------------------------------------------------------- | --------- |
+| `/ask`                  | POST   | Agentic Q&A — guardrails → intent routing → DAG execution | operator  |
+| `/ask/stream`           | POST   | SSE streaming Q&A                                         | operator  |
+| `/ask/async`            | POST   | Non-blocking async generation                             | operator  |
+| `/ask/agentic`          | POST   | Tool-calling queries with skill invocation                | operator  |
+| `/kpi`                  | POST   | Fetch KPIs for a store or region                          | viewer    |
+| `/kpi/enriched`         | POST   | KPIs with semantic metadata and anomaly flags             | viewer    |
+| `/kpi/catalog`          | GET    | Machine-readable KPI catalog (16 definitions)             | viewer    |
+| `/alerts/{store_id}`    | GET    | Active alerts for a store                                 | viewer    |
+| `/operations/brief`     | POST   | Persona-aware operational brief                           | operator  |
+| `/skills`               | GET    | List all agent skills with tool schemas                   | operator  |
+| `/skills/{name}/invoke` | POST   | Invoke a skill by name                                    | operator  |
+| `/usage`                | GET    | LLM token usage and session cost                          | admin     |
+| `/metrics`              | GET    | Prometheus exposition format                              | admin     |
+| `/health`               | GET    | Health check                                              | public    |
 
 ## Architecture decision records
 
-| ADR | Decision | Status |
-|-----|----------|--------|
-| [ADR-011](adr/011-anthropic-claude-as-llm.md) | Anthropic Claude as LLM — Haiku/Sonnet/Opus routing with fallback | Accepted |
-| [ADR-013](adr/013-persona-aware-orchestration.md) | Persona-aware orchestration (`store_manager` / `executive`) | Accepted |
-| [ADR-015](adr/015-agent-skill-framework.md) | Skill ABC + SkillRegistry with auto-instrumented invocation | Accepted |
-| [ADR-014](adr/014-dag-orchestration-intent-routing.md) | DAG-based execution with intent routing and tier-parallel agents | Accepted |
-| [ADR-016](adr/016-hybrid-context-assembly.md) | Hybrid context: streaming state + vector retrieval + session memory | Accepted |
-| [ADR-017](adr/017-llmops-prompt-versioning.md) | Versioned PromptRegistry + A/B ExperimentManager | Accepted |
-| [ADR-018](adr/018-token-cost-efficiency.md) | LRU response cache, per-call UsageTracking, compact prompts | Accepted |
+| ADR                                                    | Decision                                                            | Status   |
+| ------------------------------------------------------ | ------------------------------------------------------------------- | -------- |
+| [ADR-015](adr/015-anthropic-claude-as-llm.md)          | Anthropic Claude as LLM — Haiku/Sonnet/Opus routing with fallback   | Accepted |
+| [ADR-016](adr/016-persona-aware-orchestration.md)      | Persona-aware orchestration (`store_manager` / `executive`)         | Accepted |
+| [ADR-018](adr/018-agent-skill-framework.md)            | Skill ABC + SkillRegistry with auto-instrumented invocation         | Accepted |
+| [ADR-017](adr/017-dag-orchestration-intent-routing.md) | DAG-based execution with intent routing and tier-parallel agents    | Accepted |
+| [ADR-019](adr/019-hybrid-context-assembly.md)          | Hybrid context: streaming state + vector retrieval + session memory | Accepted |
+| [ADR-020](adr/020-llmops-prompt-versioning.md)         | Versioned PromptRegistry + A/B ExperimentManager                    | Accepted |
+| [ADR-021](adr/021-token-cost-efficiency.md)            | LRU response cache, per-call UsageTracking, compact prompts         | Accepted |
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

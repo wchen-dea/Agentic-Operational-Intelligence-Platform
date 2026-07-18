@@ -26,14 +26,21 @@ Implement in order:
 
 Include `X-API-Key` in all requests (unless `AOIP_AUTH_DISABLED=true` for dev).
 
-| Role | Access |
-|------|--------|
-| `admin` | Full access |
+| Role       | Access                                 |
+| ---------- | -------------------------------------- |
+| `admin`    | Full access                            |
 | `operator` | Query, KPI, alerts, operations, skills |
-| `viewer` | KPI and alerts (read-only) |
+| `viewer`   | KPI and alerts (read-only)             |
 
 ## Analytics endpoints (optional)
 
 - `GET http://localhost:6566/get-online-features` — Feast online feature serving for ML-driven widgets
 - `GET http://localhost:6333/dashboard` — Qdrant collections for semantic search UI
 
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

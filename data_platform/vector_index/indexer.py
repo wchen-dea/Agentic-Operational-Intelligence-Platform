@@ -20,6 +20,8 @@ Environment variables
     SPARK_THRIFT_HOST     (default: spark-thriftserver)
     SPARK_THRIFT_PORT     (default: 10000)
     EMBEDDING_MODEL       (default: sentence-transformers/all-MiniLM-L6-v2)
+    KPI_SOURCE_TABLES     (default: warehouse.gold_store_kpis,iceberg.gold.gold_store_kpis)
+    KPI_FALLBACK_MODE     (default: sample; use 'none' to disable fallback rows)
 """
 
 from __future__ import annotations
@@ -28,7 +30,6 @@ import argparse
 import logging
 import os
 import sys
-from typing import Any
 
 logger = logging.getLogger("aoip.vector_indexer")
 
@@ -38,6 +39,11 @@ THRIFT_HOST = os.environ.get("SPARK_THRIFT_HOST", "spark-thriftserver")
 THRIFT_PORT = int(os.environ.get("SPARK_THRIFT_PORT", "10000"))
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 VECTOR_DIM = 384  # all-MiniLM-L6-v2 output dimension
+KPI_SOURCE_TABLES = os.environ.get(
+    "KPI_SOURCE_TABLES",
+    "warehouse.gold_store_kpis,iceberg.gold.gold_store_kpis",
+)
+KPI_FALLBACK_MODE = os.environ.get("KPI_FALLBACK_MODE", "sample").strip().lower()
 
 # Qdrant collection names
 COLLECTION_KPI_NARRATIVES = "store_kpi_narratives"
@@ -70,6 +76,82 @@ def _query(conn, sql: str) -> list[dict]:
     cursor.execute(sql)
     cols = [d[0] for d in cursor.description]
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+
+def _candidate_kpi_sources() -> list[str]:
+    """Return normalized table candidates for KPI source resolution.
+
+    Supports either dot notation (`warehouse.gold_store_kpis`) or slash notation
+    (`warehouse/gold_store_kpis`). Slash notation is normalized to dots.
+    """
+    candidates: list[str] = []
+    for raw in KPI_SOURCE_TABLES.split(","):
+        src = raw.strip()
+        if not src:
+            continue
+        src = src.replace("/", ".")
+        candidates.append(src)
+    return candidates
+
+
+def _short_error(exc: Exception, limit: int = 240) -> str:
+    """Return a compact single-line exception string for logs."""
+    text = str(exc).replace("\n", " ").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _sample_kpi_rows() -> list[dict]:
+    """Return deterministic sample rows used when lakehouse sources are unavailable."""
+    return [
+        {
+            "store_id": "245",
+            "kpi_date": "2026-07-17",
+            "order_count": 9,
+            "revenue_total": 820.0,
+            "avg_order_value": 91.1,
+            "discount_total": 34.2,
+            "appointment_count": 15,
+            "appointment_show_count": 9,
+            "appointment_show_rate_pct": 60.0,
+            "appt_to_order_count": 4,
+            "appt_conversion_rate_pct": 26.7,
+            "invoice_total": 790.0,
+            "net_revenue": 766.0,
+            "refund_rate_pct": 3.0,
+            "work_order_count": 12,
+            "overdue_work_order_count": 3,
+            "avg_work_order_cycle_time_minutes": 145.0,
+            "sku_count": 221,
+            "in_stock_rate_pct": 84.0,
+            "total_inventory_value": 185000.0,
+            "needs_reorder_count": 18,
+        },
+        {
+            "store_id": "101",
+            "kpi_date": "2026-07-17",
+            "order_count": 41,
+            "revenue_total": 4300.0,
+            "avg_order_value": 104.9,
+            "discount_total": 101.0,
+            "appointment_count": 52,
+            "appointment_show_count": 41,
+            "appointment_show_rate_pct": 78.8,
+            "appt_to_order_count": 20,
+            "appt_conversion_rate_pct": 38.5,
+            "invoice_total": 4200.0,
+            "net_revenue": 4116.0,
+            "refund_rate_pct": 2.0,
+            "work_order_count": 35,
+            "overdue_work_order_count": 1,
+            "avg_work_order_cycle_time_minutes": 82.0,
+            "sku_count": 310,
+            "in_stock_rate_pct": 95.0,
+            "total_inventory_value": 352000.0,
+            "needs_reorder_count": 5,
+        },
+    ]
 
 
 def _embedder():
@@ -111,48 +193,77 @@ def _ensure_collection(client, name: str, vector_size: int) -> None:
 
 def _build_kpi_narrative(row: dict) -> str:
     """Convert a gold KPI row into a human-readable narrative for embedding."""
+    def _num(value, default=0):
+        return default if value is None else value
+
     return (
         f"Store {row['store_id']} on {row['kpi_date']}: "
-        f"revenue ${row.get('revenue_total', 0):,.0f} "
-        f"({row.get('revenue_wow_growth', 0) or 0:+.1%} WoW), "
-        f"order count {row.get('order_count', 0)}, "
-        f"avg order value ${row.get('avg_order_value', 0):,.2f}, "
-        f"appointment show rate {row.get('appointment_show_rate_pct', 0):.1f}%, "
-        f"appointment conversion {row.get('appt_conversion_rate_pct', 0):.1f}%, "
-        f"work orders {row.get('work_order_count', 0)} "
-        f"({row.get('overdue_work_order_count', 0)} overdue), "
-        f"avg cycle time {row.get('avg_work_order_cycle_time_minutes', 0):.0f} min, "
-        f"in-stock rate {row.get('in_stock_rate_pct', 0):.1f}%, "
-        f"inventory value ${row.get('total_inventory_value', 0):,.0f}."
+        f"revenue ${_num(row.get('revenue_total')):,.0f} "
+        f"({_num(row.get('revenue_wow_growth')):+.1%} WoW), "
+        f"order count {_num(row.get('order_count'))}, "
+        f"avg order value ${_num(row.get('avg_order_value')):,.2f}, "
+        f"appointment show rate {_num(row.get('appointment_show_rate_pct')):.1f}%, "
+        f"appointment conversion {_num(row.get('appt_conversion_rate_pct')):.1f}%, "
+        f"work orders {_num(row.get('work_order_count'))} "
+        f"({_num(row.get('overdue_work_order_count'))} overdue), "
+        f"avg cycle time {_num(row.get('avg_work_order_cycle_time_minutes')):.0f} min, "
+        f"in-stock rate {_num(row.get('in_stock_rate_pct')):.1f}%, "
+        f"inventory value ${_num(row.get('total_inventory_value')):,.0f}."
     )
 
 
 def index_store_kpi_narratives(client, embedder, conn, dry_run: bool = False) -> int:
+    # Ensure the collection exists even when source data is temporarily unavailable.
+    _ensure_collection(client, COLLECTION_KPI_NARRATIVES, VECTOR_DIM)
+
     logger.info("Fetching gold KPI rows…")
-    rows = _query(
-        conn,
+    rows: list[dict] = []
+    query_template = """
+            SELECT
+                store_id, kpi_date,
+                order_count, revenue_total, avg_order_value, discount_total,
+                appointment_count, appointment_show_count, appointment_show_rate_pct,
+                appt_to_order_count, appt_conversion_rate_pct,
+                invoice_total, net_revenue, refund_rate_pct,
+                work_order_count, overdue_work_order_count, avg_work_order_cycle_time_minutes,
+                sku_count, in_stock_rate_pct, total_inventory_value, needs_reorder_count
+            FROM {source}
+            ORDER BY kpi_date DESC
+            LIMIT 10000
         """
-        SELECT
-            store_id, kpi_date,
-            order_count, revenue_total, avg_order_value, discount_total,
-            appointment_count, appointment_show_count, appointment_show_rate_pct,
-            appt_to_order_count, appt_conversion_rate_pct,
-            invoice_total, net_revenue, refund_rate_pct,
-            work_order_count, overdue_work_order_count, avg_work_order_cycle_time_minutes,
-            sku_count, in_stock_rate_pct, total_inventory_value, needs_reorder_count
-        FROM iceberg.gold.gold_store_kpis
-        ORDER BY kpi_date DESC
-        LIMIT 10000
-    """,
-    )
+    selected_source: str | None = None
+    source_errors: list[str] = []
+    for source in _candidate_kpi_sources():
+        try:
+            rows = _query(conn, query_template.format(source=source))
+            selected_source = source
+            logger.info("Using KPI source: %s", source)
+            break
+        except Exception as exc:
+            source_errors.append(f"{source}: {_short_error(exc)}")
+
+    if selected_source is None:
+        if KPI_FALLBACK_MODE == "sample":
+            rows = _sample_kpi_rows()
+            selected_source = "fallback.sample"
+            logger.warning(
+                "KPI source table unavailable (%s); using fallback sample rows",
+                " | ".join(source_errors) if source_errors else "no KPI sources configured",
+            )
+            logger.info("Using KPI source: %s", selected_source)
+        else:
+            logger.warning(
+                "Skipping KPI narrative indexing: source table unavailable (%s)",
+                " | ".join(source_errors) if source_errors else "no KPI sources configured",
+            )
+            return 0
+
     logger.info("  Fetched %d KPI rows", len(rows))
 
     if dry_run:
         for r in rows[:3]:
             print(_build_kpi_narrative(r))
         return len(rows)
-
-    _ensure_collection(client, COLLECTION_KPI_NARRATIVES, VECTOR_DIM)
 
     from qdrant_client.models import PointStruct
 

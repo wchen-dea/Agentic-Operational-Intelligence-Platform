@@ -1,3 +1,5 @@
+"""Module for schema builders."""
+
 from pyflink.table import Schema, DataTypes
 from flink_job.vehicle_inspection.data_types import get_tire_inspection_details
 

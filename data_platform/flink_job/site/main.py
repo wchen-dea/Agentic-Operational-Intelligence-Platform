@@ -1,3 +1,5 @@
+"""Module for main."""
+
 import logging
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment

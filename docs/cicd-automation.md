@@ -48,13 +48,13 @@ uv run pytest tests/ \
 
 Test environment variables injected by the CI job:
 
-| Variable | CI value | Reason |
-|----------|----------|--------|
-| `AOIP_AUTH_DISABLED` | `true` | API tests hit endpoints without a key |
-| `AOIP_KPI_SOURCE` | `sqlite` | Avoids pymysql / Aurora MySQL dependency |
-| `AOIP_REDIS__URL` | `""` | Falls back to in-process store |
-| `AOIP_TEAMS__WEBHOOK_URL` | `""` | Disables MS Teams dispatch |
-| `AOIP_OTEL__ENABLED` | `false` | Disables OTel tracing |
+| Variable                  | CI value | Reason                                   |
+| ------------------------- | -------- | ---------------------------------------- |
+| `AOIP_AUTH_DISABLED`      | `true`   | API tests hit endpoints without a key    |
+| `AOIP_KPI_SOURCE`         | `sqlite` | Avoids pymysql / Aurora MySQL dependency |
+| `AOIP_REDIS__URL`         | `""`     | Falls back to in-process store           |
+| `AOIP_TEAMS__WEBHOOK_URL` | `""`     | Disables MS Teams dispatch               |
+| `AOIP_OTEL__ENABLED`      | `false`  | Disables OTel tracing                    |
 
 Coverage report is uploaded to Codecov (`coverage.xml`). Failures in the upload step do not fail the pipeline (`fail_ci_if_error: false`).
 
@@ -75,12 +75,12 @@ Image is built with `push: false` — not published to a registry in CI. See [de
 
 ## Branch strategy
 
-| Branch | CI | Description |
-|--------|----|-------------|
-| `main` | lint + typecheck + test + docker | Trunk — merges from feature branches via PR |
-| `prd` | lint + typecheck + test + docker | Production-ready releases; requires PR from `main` |
-| `develop` | lint + typecheck + test | Integration branch for feature work |
-| `feature/*` | lint + typecheck + test (on PR) | Short-lived feature branches |
+| Branch      | CI                               | Description                                        |
+| ----------- | -------------------------------- | -------------------------------------------------- |
+| `main`      | lint + typecheck + test + docker | Trunk — merges from feature branches via PR        |
+| `prd`       | lint + typecheck + test + docker | Production-ready releases; requires PR from `main` |
+| `develop`   | lint + typecheck + test          | Integration branch for feature work                |
+| `feature/*` | lint + typecheck + test (on PR)  | Short-lived feature branches                       |
 
 ## Local pre-commit equivalents
 
@@ -167,3 +167,11 @@ omit = [
     "data_platform/batch/*",
 ]
 ```
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

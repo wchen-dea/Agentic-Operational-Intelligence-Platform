@@ -1,3 +1,5 @@
+"""Module for kpi."""
+
 from fastapi import APIRouter, Depends
 from ai_systems.gateway.api.models import KPIRequest
 from ai_systems.gateway.api.auth import require_auth, APIKeyRecord

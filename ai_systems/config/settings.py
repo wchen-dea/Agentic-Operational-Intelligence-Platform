@@ -1,3 +1,5 @@
+"""Module for settings."""
+
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -30,7 +32,7 @@ class CDCSettings(BaseModel):
     mode: str = "aurora_mysql_cdc"
     transport: str = "kafka_msk"
     connector: str = "aws_dms"
-    topic_prefix: str = "retail_ops.aurora"
+    topic_prefix: str = "cdc"
     checkpoint_location: str = "dbfs:/checkpoints/aurora_mysql_cdc"
     watermark_delay_seconds: int = 60
 
@@ -101,6 +103,15 @@ class LoggingSettings(BaseModel):
     json_format: bool = True  # Set false for human-readable local dev output
 
 
+class Neo4jSettings(BaseModel):
+    """Neo4j graph database connection settings."""
+
+    uri: str = "bolt://localhost:7687"
+    username: str = "neo4j"
+    password_env_var: str = "NEO4J_PASSWORD"
+    database: str = "neo4j"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="AOIP_",
@@ -129,6 +140,7 @@ class Settings(BaseSettings):
     teams: TeamsSettings = TeamsSettings()
     otel: OTelSettings = OTelSettings()
     logging: LoggingSettings = LoggingSettings()
+    neo4j: Neo4jSettings = Neo4jSettings()
 
 
 settings = Settings()

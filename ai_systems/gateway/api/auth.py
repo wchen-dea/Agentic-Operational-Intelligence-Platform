@@ -140,6 +140,13 @@ async def require_auth(
     if os.environ.get("AOIP_AUTH_DISABLED", "").lower() in ("true", "1", "yes"):
         return APIKeyRecord(key_hash="dev", role="admin", tenant="dev")
 
+    # Fallback for clients that can only send Authorization headers
+    # (for example Prometheus scrape configs).
+    if not api_key:
+        authz = request.headers.get("Authorization", "")
+        if authz.lower().startswith("bearer "):
+            api_key = authz.split(" ", 1)[1].strip()
+
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing X-API-Key header")
 

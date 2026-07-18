@@ -1,3 +1,5 @@
+"""Module for test hybrid search."""
+
 import tempfile
 
 from ai_systems.retrieval.hybrid_search import LocalHybridSearch

@@ -1,3 +1,5 @@
+"""Module for test promotion agent."""
+
 from ai_systems.agents.promotion_agent import PromotionAgent
 
 

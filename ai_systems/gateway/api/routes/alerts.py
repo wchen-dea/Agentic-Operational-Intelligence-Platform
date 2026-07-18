@@ -1,3 +1,5 @@
+"""Module for alerts."""
+
 from fastapi import APIRouter, Depends
 from ai_systems.gateway.api.auth import require_auth, APIKeyRecord
 from ai_systems.config.settings import settings

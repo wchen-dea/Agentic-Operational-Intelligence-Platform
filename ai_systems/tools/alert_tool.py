@@ -1,3 +1,5 @@
+"""Module for alert tool."""
+
 import logging
 from functools import lru_cache
 from typing import Any

@@ -1,3 +1,5 @@
+"""Module for test api."""
+
 from fastapi.testclient import TestClient
 
 from ai_systems.gateway.api.app import app

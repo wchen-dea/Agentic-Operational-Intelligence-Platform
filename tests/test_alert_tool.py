@@ -1,3 +1,5 @@
+"""Module for test alert tool."""
+
 from ai_systems.tools.alert_tool import load_rules, detect_kpi_alerts_for_store
 
 

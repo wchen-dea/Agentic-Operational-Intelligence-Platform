@@ -15,8 +15,8 @@
   Reads the landing CDC log, flattens the Debezium after/before JSON envelopes,
   and appends every event with its CDC operation type. Full history is retained.
 
-  Primary key : order_id
-  CDC source  : retail_ops.aurora.retail_ops.sales_orders
+    Primary key : order_id
+    CDC source  : cdc_sales_order
 */
 
 with raw as (
@@ -43,22 +43,54 @@ pivoted as (
 
         -- Payload: prefer `after`, fall back to `before` for deletes
         case when cdc_op = 'd'
-             then get_json_object(before_json, '$.id')
-             else get_json_object(after_json,  '$.id')
+             then coalesce(
+                 get_json_object(before_json, '$.id'),
+                 get_json_object(before_json, '$.sales_order_identifier')
+             )
+             else coalesce(
+                 get_json_object(after_json, '$.id'),
+                 get_json_object(after_json, '$.sales_order_identifier')
+             )
         end                                                             as order_id,
 
-        get_json_object(after_json, '$.store_id')                       as store_id,
-        get_json_object(after_json, '$.customer_id')                    as customer_id,
-        get_json_object(after_json, '$.status')                         as status,
-        get_json_object(after_json, '$.order_type')                     as order_type,
+        coalesce(
+            get_json_object(after_json, '$.store_id'),
+            get_json_object(after_json, '$.site_number')
+        )                                                               as store_id,
+        coalesce(
+            get_json_object(after_json, '$.customer_id'),
+            get_json_object(after_json, '$.customer_identifier')
+        )                                                               as customer_id,
+        coalesce(
+            get_json_object(after_json, '$.status'),
+            get_json_object(after_json, '$.sales_order_status_description'),
+            get_json_object(after_json, '$.sales_order_status_code')
+        )                                                               as status,
+        coalesce(
+            get_json_object(after_json, '$.order_type'),
+            get_json_object(after_json, '$.sales_order_document_type_description'),
+            get_json_object(after_json, '$.sales_order_document_type_code')
+        )                                                               as order_type,
         cast(get_json_object(after_json, '$.total_amount')  as double)  as total_amount,
         cast(get_json_object(after_json, '$.tax_amount')    as double)  as tax_amount,
         cast(get_json_object(after_json, '$.discount_amount') as double) as discount_amount,
         get_json_object(after_json, '$.currency_code')                  as currency_code,
         get_json_object(after_json, '$.promotion_id')                   as promotion_id,
-        get_json_object(after_json, '$.sales_rep_id')                   as sales_rep_id,
-        cast(get_json_object(after_json, '$.created_at')    as timestamp) as created_at,
-        cast(get_json_object(after_json, '$.updated_at')    as timestamp) as updated_at,
+        coalesce(
+            get_json_object(after_json, '$.sales_rep_id'),
+            get_json_object(after_json, '$.processor_employee_identifier')
+        )                                                               as sales_rep_id,
+        coalesce(
+            cast(get_json_object(after_json, '$.created_at') as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.create_timestamp') as bigint) / 1000) as timestamp),
+            cast(date_add(to_date('1970-01-01'), cast(get_json_object(after_json, '$.sales_order_created_date') as int)) as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.db_create_timestamp') as bigint) / 1000) as timestamp)
+        )                                                               as created_at,
+        coalesce(
+            cast(get_json_object(after_json, '$.updated_at') as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.last_modify_timestamp') as bigint) / 1000) as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.db_update_timestamp') as bigint) / 1000) as timestamp)
+        )                                                               as updated_at,
 
         -- Keep raw JSON for schema-evolution safety
         after_json                                                      as _after_json,

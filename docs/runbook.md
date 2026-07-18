@@ -1,444 +1,441 @@
-# Runbook
+# AOIP Operations Runbook
 
-## Prerequisites
+This runbook is a procedure-first playbook for operating and recovering the local AOIP platform.
+
+## 1) Operating Principles
+
+- Run commands from repository root.
+- Use exact command sequence; do not skip validation gates.
+- Prefer targeted restarts over full stack restarts.
+- Keep alerts actionable: no noisy probes, no stale rules.
+- For destructive actions (volume deletion), confirm intent first.
+
+## 2) Prerequisites
 
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) installed
-- Docker Desktop (≥ 8 GB RAM allocated recommended)
-- Maven 3.x (`brew install maven`) — for building the Flink connector JAR
-- [Ollama](https://ollama.com/) installed (local LLM development only)
-- LLM provider configuration in `.env`:
-  - Local dev (Ollama): `AOIP_LLM__PROVIDER=ollama`
-  - Production (Anthropic): `AOIP_LLM__PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...`
+- uv
+- Docker Desktop (8+ GB RAM recommended)
+- Maven 3.x (`brew install maven`) for Flink fat JAR build
+- Optional local LLM: Ollama
 
-## First-time setup
+Required environment file:
 
 ```bash
-make install        # create .venv and install all dependency groups
-make env            # create .env
-make flink-jar      # build the Kafka + Avro fat JAR (Maven, ~40 MB, one-time)
+make env
 ```
 
-Example `.env` snippets:
+## 3) Procedure A: First-Time Bootstrap
+
+Goal: prepare all dependencies and build artifacts.
 
 ```bash
-# Local development (Ollama)
-AOIP_LLM__PROVIDER=ollama
-AOIP_LLM__MODEL=llama3.1:8b
-AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
-AOIP_LLM__OLLAMA_TIMEOUT_SECONDS=120
-
-# Production (Anthropic)
-AOIP_LLM__PROVIDER=anthropic
-ANTHROPIC_API_KEY=your-key
-AOIP_LLM__MODEL=claude-sonnet-4-20250514
+make install
+make env
+make flink-jar
 ```
 
-## LLM provider profiles
-
-### Local development profile (Ollama)
+Validation:
 
 ```bash
-AOIP_LLM__PROVIDER=ollama
-AOIP_LLM__MODEL=llama3.2:latest
-AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434
-AOIP_LLM__OLLAMA_TIMEOUT_SECONDS=120
-```
-
-Start/check Ollama:
-
-```bash
-ollama serve
-curl --noproxy '*' http://localhost:11434/api/tags
-```
-
-### Production profile (Anthropic)
-
-```bash
-AOIP_LLM__PROVIDER=anthropic
-AOIP_LLM__MODEL=claude-sonnet-4-20250514
-ANTHROPIC_API_KEY=<secret>
-```
-
-Notes:
-
-- Ollama supports sync, async, and streaming generation in this project.
-- Tool-calling falls back to plain generation when provider is Ollama.
-- Image generation is Anthropic-only in the current implementation.
-
-## Start the full platform
-
-```bash
-make up             # start all infrastructure (Kafka, MySQL, Redis, Conduktor, app, etc.)
-make produce        # start synthetic Avro message producer (15 canonical topics)
-```
-
-## Pipeline stage reference
-
-The platform has eight ordered stages. Each can be started and debugged independently.
-
-### Stage 1 — Ingestion (source events → canonical Avro topics)
-
-```bash
-make produce                                # all 15 topics at 0.5 s interval
-PRODUCE_INTERVAL=2 make produce             # slower rate
-make topics                                 # verify topics exist
-# Conduktor: http://localhost:8086  Schema Registry: http://localhost:8081
-```
-
-Producer runtime model:
-
-- `data_platform.producer.mdm.master_batch`
-  - Produces master-data topics in batch mode.
-  - Restricted to Airflow DAG context (`mdm_daily_processing`).
-- `data_platform.producer.transaction.realtime`
-  - Produces transaction topics in real-time mode.
-  - Loads canonical master IDs from Kafka at startup.
-  - Rebinds transaction FK pools to those canonical IDs.
-  - Pre-validates sampled FK references and blocks start on mismatch.
-  - Enforces customer-store consistency (customer for a site cannot be emitted for another site).
-
-Topics produced: `CanonicalSalesforceCrmAppointment`, `CanonicalSapSalesorderDetail`, `CanonicalTrendwellVehivleInspection`, `CanonicalKronosCrewtime`, `CanonicalWarehouseInventorySnapshot`, and 10 more.
-
-### Stage 2 — Flink (canonical → PDM Sink topics)
-
-```bash
-make flink-jar                              # build connector fat JAR (Maven, once)
-make flink-up                               # start JobManager + TaskManager :8082
-make flink-run JOB=appointment              # submit one pipeline
-make flink-submit                           # submit all 14 pipelines
-make flink-jobs && make flink-cancel JOB_ID=<id>
-```
-
-Sink topics: `SinkAppointment`, `SinkSalesOrder`, `SinkWorkOrder`, `SinkArticleInventory`, and 40+ more.
-
-### Stage 3 — Kafka Connect JDBC Sink (Sink topics → MySQL ODS)
-
-```bash
-make register-schemas                       # register Avro schemas
-make register-connectors                    # JDBC Sink connectors → MySQL retail_ops tables
-# Kafka Connect: http://localhost:8083  MySQL: localhost:3306
-```
-
-### Stage 4 — AI Systems (real-time from MySQL ODS)
-
-```bash
-make dev                                    # FastAPI :8000 with hot-reload
-curl -X POST http://localhost:8000/kpi/enriched \
-     -H "Content-Type: application/json" -d '{"store_id":"245"}'
-curl -X POST http://localhost:8000/ask \
-     -H "Content-Type: application/json" \
-     -d '{"question":"Why are Phoenix sales down?","store_id":"245"}'
-```
-
-### Stage 5 — Debezium CDC (MySQL ODS → CDC Kafka topics)
-
-```bash
-make register-cdc                           # register Debezium source connector
-# CDC topics: retail_ops.aurora.retail_ops.{sales_orders,appointments,
-#             pos_invoices,work_orders,article_inventory}
-```
-
-### Stage 6 — Spark Streaming → MinIO Landing (Iceberg)
-
-```bash
-make lake-up                                # MinIO + Iceberg REST + Spark cluster
-make lake-stream                            # start cdc_to_landing.py
-# Landing tables: iceberg.landing.{sales_orders,appointments,…}
-# MinIO: http://localhost:9001  Iceberg REST: http://localhost:8181
-```
-
-### Stage 7 — dbt Lakehouse (landing → bronze → silver → gold → analytics)
-
-```bash
-make dbt-deps && make dbt-run               # full pipeline
-make dbt-run LAYER=bronze/silver/gold/analytics  # single layer
-make dbt-test                               # data quality tests
-make airflow-up                             # scheduler every 30 min
-# Airflow: http://localhost:8085  (admin / admin)
-```
-
-### Stage 8 — Analytics / ML / LLM on Lakehouse
-
-```bash
-make analytics-up                           # Qdrant + Feast feature server
-make analytics-materialize                  # push features to Redis
-make analytics-index                        # build Qdrant vector indexes
-# Qdrant: http://localhost:6333/dashboard  Feast: http://localhost:6566
-```
-
-## Service endpoints
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Platform API | http://localhost:8000 | — |
-| Conduktor | http://localhost:8086 | admin@conduktor.io / admin |
-| Schema Registry | http://localhost:8081 | — |
-| Flink Dashboard | http://localhost:8082 | — |
-| Kafka Connect | http://localhost:8083 | — |
-| Airflow UI | http://localhost:8085 | admin / admin |
-| Spark Master | http://localhost:4040 | — |
-| Iceberg REST | http://localhost:8181 | — |
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| Qdrant | http://localhost:6333/dashboard | — |
-| Feast Server | http://localhost:6566 | — |
-
-## Flink cluster + canonical topic processing
-
-```bash
-make flink-up                       # start Flink JobManager + TaskManager
-make flink-run JOB=appointment      # submit a single pipeline
-make flink-submit                   # submit all 14 pipelines
-make flink-jobs                     # list running Flink jobs (REST API)
-make flink-cancel JOB_ID=<id>       # cancel a running job
-make logs-flink-jm                  # tail JobManager logs
-```
-
-Available pipelines: `appointment article crewtime customer employee inventory kronos_hours sales_order sales_order_receipt site vehicle vehicle_inspection voucher work_order`
-
-You can also submit a single pipeline directly:
-
-```bash
-data_platform/flink_job/start_flink_job.sh appointment
-data_platform/flink_job/start_flink_job.sh --list   # show all available
-```
-
-## Iceberg lakehouse (Spark Streaming + dbt)
-
-```bash
-make lake-up            # start MinIO + Iceberg REST + Spark cluster + Spark Thrift Server
-make lake-stream        # start CDC → landing Spark Structured Streaming job
-make dbt-deps           # install dbt packages (first time)
-make dbt-run            # run full dbt pipeline: staging → bronze → silver → gold
-make dbt-run LAYER=silver           # run a single layer
-make dbt-test           # run dbt data quality tests
-```
-
-## Airflow orchestration
-
-```bash
-make airflow-up         # build + init + start Airflow (webserver + scheduler)
-make airflow-trigger    # manually trigger the dbt_lakehouse_pipeline DAG
-make logs-airflow       # tail scheduler + webserver logs
-make airflow-down       # stop Airflow
-```
-
-The `dbt_lakehouse_pipeline` DAG runs every 30 minutes:
-`start → dbt deps → bronze (run + test) → silver (run + test) → gold (run + test) → analytics (run + test) → end`
-
-The `mdm_daily_processing` DAG runs daily and triggers `data_platform.producer.mdm.master_batch --runs 1`.
-
-### Post-restart checks (recommended)
-
-Run this sequence after `make restart-full` to quickly validate end-to-end health:
-
-```bash
-# Core runtime
 make ps
+```
 
-# CDC connector health and topic routing
+Pass criteria:
+
+- Python environment is created.
+- No missing dependency errors.
+- Flink JAR exists and build completed successfully.
+
+## 4) Procedure B: Standard Startup (Core)
+
+Goal: start the platform in a stable baseline state.
+
+```bash
+make up
+make ps
+```
+
+Validation:
+
+```bash
+curl --noproxy '*' -sf http://localhost:8000/health
+curl --noproxy '*' -sf http://localhost:8081/subjects
+curl --noproxy '*' -sf http://localhost:8083/connectors
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474
+```
+
+Pass criteria:
+
+- Core services are Up in `make ps`.
+- API, Schema Registry, Kafka Connect, and Neo4j endpoints return healthy responses.
+
+## 5) Procedure C: Full Pipeline Startup
+
+Goal: bring up all major clusters and data/AI planes.
+
+```bash
+make up-full
+make produce
+make lake-up
+make lake-stream
+make dbt-deps
+make dbt-run
+make analytics-up
+make analytics-materialize
+make analytics-index
+make graph-sync
+```
+
+Validation gate after startup:
+
+```bash
+make ps
+curl --noproxy '*' -sf http://localhost:6333/healthz
+curl --noproxy '*' -sf http://localhost:8085/health
+curl --noproxy '*' -sf http://localhost:9090/api/v1/targets
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474
+```
+
+Pass criteria:
+
+- Qdrant, Airflow, Prometheus, and Neo4j endpoints respond.
+- Prometheus targets are present and healthy.
+
+## 6) Procedure D: Stage-by-Stage Operations
+
+Use this when running or debugging one stage at a time.
+
+### Stage 1: Source Event Production
+
+```bash
+make produce
+make topics
+```
+
+### Stage 2: Flink Canonical -> Sink
+
+```bash
+make flink-up
+make flink-run JOB=appointment
+make flink-jobs
+```
+
+### Stage 3: Kafka Connect Sink -> MySQL ODS
+
+```bash
+make register-schemas
+make register-connectors
+curl --noproxy '*' -sf http://localhost:8083/connectors
+```
+
+### Stage 4: AI API Runtime
+
+```bash
+make dev
+```
+
+Quick checks:
+
+```bash
+curl --noproxy '*' -sf http://localhost:8000/health
+curl -s -X POST http://localhost:8000/kpi/enriched -H 'Content-Type: application/json' -d '{"store_id":"245"}'
+```
+
+### Stage 5: Debezium CDC
+
+```bash
+make register-cdc
 curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/status
-curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/topics
+```
 
-# CDC -> MinIO stream + landing writes
+### Stage 6: Spark Streaming -> Iceberg Landing
+
+```bash
 make lake-stream
 docker compose -f container/docker-compose.yaml logs --tail 120 spark-cdc-streaming
-docker exec container-minio-1 sh -lc 'ls -la /data/landing && ls -la /data/checkpoints'
-
-# Airflow health and scheduler heartbeat
-curl --noproxy '*' -sf http://localhost:8085/health
-docker compose -f container/docker-compose.yaml exec -T airflow-scheduler \
-  airflow jobs check --job-type SchedulerJob \
-  --hostname $(docker compose -f container/docker-compose.yaml exec -T airflow-scheduler hostname)
 ```
 
-Spark endpoint note:
-
-- `http://localhost:4040` is Spark Master Web UI.
-- `localhost:7077` is Spark RPC (non-HTTP), so browser/curl returns empty reply.
-
-## Analytics layer (Feature Store + Semantic Layer + Vector Index)
+### Stage 7: dbt Transformations
 
 ```bash
-# Start Qdrant vector DB and Feast online feature server
-make analytics-up
+make dbt-run
+make dbt-test
+```
 
-# Build analytics feature tables (requires dbt to have run gold first)
-make dbt-run LAYER=analytics
+### Stage 8: Feature + Vector Layer
 
-# Register Feast feature views and materialize to Redis
+```bash
 make analytics-materialize
-
-# Build Qdrant vector indexes (store KPI narratives + metric definitions)
 make analytics-index
-
-# Dry-run: preview index payloads without upserting to Qdrant
-make analytics-index-dry
-
-# Stop analytics services
-make analytics-down
 ```
 
-**Analytics components:**
-
-| Component | Description |
-|-----------|-------------|
-| `feat_store_performance` | Per-store rolling 7d/28d revenue, WoW growth, show-rate delta, overdue rate, reorder pressure |
-| `feat_customer_behavior` | Per-customer RFM (recency/frequency/monetary), appointment show rate, churn risk band |
-| Semantic models | 9 named MetricFlow metrics: `revenue_total`, `appointment_show_rate`, `refund_rate`, etc. |
-| `store_kpi_narratives` | Qdrant collection — KPI text narratives embedded for semantic search |
-| `metric_definitions` | Qdrant collection — metric descriptions embedded for AI reasoning |
-
-## Kafka / Schema management
+Qdrant collection check:
 
 ```bash
-make topics             # list all Kafka topics (non-internal)
-make register-schemas   # register Avro schemas into Schema Registry
-make register-connectors # register JDBC Sink connectors for all PDM tables
-make register-cdc       # register the Debezium CDC connector
+curl -s --noproxy '*' http://localhost:6333/collections | cat
 ```
 
-## Local development (API + AI layer)
+### Stage 9: Graph Relationships (Neo4j)
 
 ```bash
-make dev                # run FastAPI with hot-reload on port 8000
-make mcp                # run the MCP server
-make test               # run test suite
-make test-cov           # tests with coverage report
-make lint               # ruff lint check
-make fmt                # ruff auto-format
-make typecheck          # pyright type check
+make graph-up
+make graph-sync
+make graph-check
 ```
 
-## Environment variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AOIP_LLM__PROVIDER` | Yes | LLM backend selector: `ollama` (local) or `anthropic` (prod) |
-| `AOIP_LLM__MODEL` | Yes | Model ID for selected provider |
-| `ANTHROPIC_API_KEY` | Conditional | Required when `AOIP_LLM__PROVIDER=anthropic` |
-| `AOIP_LLM__OLLAMA_BASE_URL` | Conditional | Required when `AOIP_LLM__PROVIDER=ollama` (default: `http://localhost:11434`) |
-| `AOIP_LLM__OLLAMA_TIMEOUT_SECONDS` | No | Ollama HTTP timeout seconds (default: `120`) |
-| `AOIP_AUTH_DISABLED` | No | `true` to skip API key auth in dev |
-| `AOIP_API_KEY_ADMIN` | No | Register admin API key at startup |
-| `AOIP_API_KEY_OPERATOR` | No | Register operator API key at startup |
-| `AOIP_API_KEY_VIEWER` | No | Register viewer API key at startup |
-| `PRODUCE_INTERVAL` | No | Producer burst interval in seconds (default: 0.5) |
-| `QDRANT_HOST` | No | Qdrant hostname (default: `qdrant`) |
-| `EMBEDDING_MODEL` | No | Sentence-transformers model for vector indexing (default: `all-MiniLM-L6-v2`) |
-
-## API Quick Reference
-
-### Ask (agentic Q&A)
+Neo4j check:
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Why are Phoenix sales down?","store_id":"245","persona":"executive"}'
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474
 ```
 
-### Streaming Q&A (SSE)
+Graph transform behavior:
+
+- `make graph-sync` loads ODS-derived relationships (`AVAILABLE_AT`, `WORKS_AT`, `VISITS`).
+- The same command also projects gold KPI snapshots from `iceberg.gold.gold_store_kpis` as `(:Store)-[:HAS_KPI_SNAPSHOT]->(:StoreKPI)`.
+
+## 7) Procedure E: End-to-End Health Certification
+
+Run this before demos, release validation, or major merges.
 
 ```bash
-curl -N -X POST http://localhost:8000/ask/stream \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Summarize store 245 KPIs","store_id":"245"}'
+make ps
+curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/status
+curl --noproxy '*' -sf http://localhost:8083/connectors/debezium-mysql-retail-ops/topics
+docker compose -f container/docker-compose.yaml logs --tail 150 spark-cdc-streaming
+curl --noproxy '*' -sf http://localhost:8085/health
+curl -s --noproxy '*' http://localhost:6333/collections | cat
+curl -s --noproxy '*' http://localhost:9090/api/v1/rules | head -c 1000
+curl -s --noproxy '*' http://localhost:9090/api/v1/alerts | head -c 1000
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474
 ```
 
-### Operational Brief
+Certification pass criteria:
+
+- CDC connector status is RUNNING.
+- Spark CDC stream logs show active streaming query.
+- Airflow health endpoint is healthy.
+- Qdrant contains expected collections.
+- Neo4j Browser endpoint responds and graph sync completed.
+- Prometheus rule groups load without YAML errors.
+- Active alerts match real failures only.
+
+## 8) Procedure F: Alert and Dashboard Operations
+
+Major cluster monitoring uses:
+
+- Prometheus config: `container/observability/prometheus.yml`
+- Alert rules: `container/observability/alerts.yml`
+- Blackbox modules: `container/observability/blackbox.yml`
+- Grafana dashboards: `container/observability/grafana/provisioning/dashboards/`
+
+### Apply observability config changes
 
 ```bash
-curl -X POST http://localhost:8000/operations/brief \
-  -H "Content-Type: application/json" \
-  -d '{"store_id":"245","region":"Phoenix","persona":"store_manager"}'
+docker compose -f container/docker-compose.yaml restart prometheus
+docker compose -f container/docker-compose.yaml ps prometheus
+curl -s --noproxy '*' http://localhost:9090/api/v1/rules | head -c 1000
+curl -s --noproxy '*' http://localhost:9090/api/v1/targets | head -c 1000
+curl -s --noproxy '*' http://localhost:9090/api/v1/alerts | head -c 1000
 ```
 
-### KPIs
+Pass criteria:
+
+- Prometheus status is Up (not restart loop).
+- Rules endpoint returns success and healthy groups.
+- Targets endpoint shows healthy probes.
+- Alerts endpoint has no false positives.
+
+## 9) Incident Playbooks
+
+### Incident 1: Prometheus restart loop after alert changes
+
+Symptoms:
+
+- Prometheus container repeatedly restarts.
+- Rules endpoint unavailable.
+
+Actions:
 
 ```bash
-curl -X POST http://localhost:8000/kpi/enriched -H "Content-Type: application/json" -d '{"store_id":"245"}'
-curl http://localhost:8000/kpi/catalog
-curl http://localhost:8000/alerts/245
-curl http://localhost:8000/metrics
-curl http://localhost:8000/health
+docker compose -f container/docker-compose.yaml logs --tail 120 prometheus | cat
 ```
 
-## Authentication
+If logs show YAML parse error in alerts file:
 
-When `AOIP_AUTH_DISABLED` is not set to `true`, pass `X-API-Key` on every request:
+1. Fix indentation/quotes in `container/observability/alerts.yml`.
+2. Restart Prometheus.
+3. Re-check rules/targets/alerts endpoints.
+
+### Incident 2: Kafka cluster degraded alert is firing
+
+Actions:
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "X-API-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Revenue summary"}'
+curl --noproxy '*' -sf http://localhost:8083/connectors
+curl --noproxy '*' -sf http://localhost:8081/subjects
+docker compose -f container/docker-compose.yaml ps kafka-connect schema-registry
 ```
 
-| Role | Access |
-|------|--------|
-| `admin` | All endpoints |
-| `operator` | Query, KPI, alerts, operations, skills, streaming |
-| `viewer` | KPI and alerts (read-only) |
-
-## Testing
+Recovery:
 
 ```bash
-make test               # quick run
-make test-cov           # with coverage report (40% minimum gate)
-uv run pytest -v tests/test_ai_gaps.py   # single file
+docker compose -f container/docker-compose.yaml restart kafka-connect schema-registry
 ```
 
-### LLM smoke tests
+### Incident 3: CDC RUNNING but landing is empty
 
-Quick provider smoke test through the project LLM wrapper:
+Actions:
 
 ```bash
-AOIP_LLM__PROVIDER=ollama \
-AOIP_LLM__MODEL=llama3.2:latest \
-AOIP_LLM__OLLAMA_BASE_URL=http://localhost:11434 \
-python - <<'PY'
-from ai_systems.core.llm import generate
-print(generate('Reply with exactly: ollama_smoke_ok'))
-PY
+make lake-stream
+docker compose -f container/docker-compose.yaml logs --tail 150 spark-cdc-streaming
+docker exec container-minio-1 sh -lc 'ls -la /data/landing && ls -la /data/checkpoints'
 ```
 
-API-level smoke test (after `make dev`):
+Recovery:
+
+- Ensure CDC topics are present and connector topics endpoint returns expected mappings.
+- Keep stream process running; validate checkpoint activity.
+
+### Incident 4: dbt layer fails to connect to Spark Thrift
+
+Actions:
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Reply with exactly: api_smoke_ok","store_id":"245"}'
+make ps
+docker compose -f container/docker-compose.yaml logs --tail 150 spark-thriftserver
+make dbt-run LAYER=bronze
 ```
 
-## Conduktor not responding
+Recovery:
+
+- Ensure required namespaces exist: default, bronze, silver, gold, analytics.
+- Re-run failed layer after Spark Thrift Server is healthy.
+
+### Incident 5: Qdrant collections missing
+
+Actions:
 
 ```bash
-make conduktor-health   # check health endpoint
-make conduktor-restart  # restart the container (clears frozen HTTP thread pool)
+curl -s --noproxy '*' http://localhost:6333/collections | cat
+make analytics-index
+curl -s --noproxy '*' http://localhost:6333/collections | cat
 ```
 
-## Troubleshooting
+Recovery:
 
-| Symptom | Fix |
-|---------|-----|
-| `docker compose up` fails with `.env not found` | Run `make env` |
-| Broker containers stuck `starting` | Volumes may have corrupted Raft metadata; run `make down` then wipe broker volumes: `docker volume rm $(docker volume ls -q \| grep broker)` then `make up` |
-| Conduktor shows unhealthy | Run `make conduktor-restart` — autoheal also handles this automatically |
-| `ModuleNotFoundError` | Run `make install` |
-| Ollama calls fail with connection refused | Start Ollama (`ollama serve`) and verify `AOIP_LLM__OLLAMA_BASE_URL` |
-| Anthropic calls fail with missing key | Set `ANTHROPIC_API_KEY` and `AOIP_LLM__PROVIDER=anthropic` |
-| LLM output looks degraded in Ollama mode | Use a stronger Ollama model or switch provider to Anthropic |
-| Port 8000 in use | Kill existing process or run `make dev` with `--port 8001` |
-| CDC connector is `RUNNING` but MinIO landing is empty | Start Spark CDC stream with `make lake-stream`; confirm `spark-cdc-streaming` logs show `Streaming query started` and verify objects under `/data/landing/landing`. |
-| Airflow `bronze.run` fails with `Database Error: failed to connect` | Ensure Spark Thrift namespaces exist (`default`, `bronze`, `silver`, `gold`, `analytics`). Then retry dbt and clear stuck task instances (`airflow tasks clear ... --task-regex '^bronze.run$' --yes`). |
-| `qdrant` or `producer` appear `unhealthy` in `make ps` while service works | Validate via direct endpoint/log checks (`curl --noproxy '*' http://localhost:6333/healthz`, producer logs). Local healthchecks can be image-mismatched. |
+- Confirm analytics source tables are available.
+- If source data is sparse, verify indexer source selection config.
 
-## Deployment Notes
+### Incident 6: Neo4j relationships missing
 
-- Configure `ai_systems/config/settings.py` with real Aurora MySQL and MSK endpoints.
-- Use AWS Secrets Manager for credentials (referenced by `password_secret_name` in settings).
-- Replace MinIO with AWS S3; replace Iceberg REST catalog with AWS Glue Catalog or Nessie.
-- Replace `StreamingStateStore` with Redis or a Kafka consumer for real-time state.
-- Connect `MetricsCollector` in `observability/evaluation.py` to Prometheus/Grafana for production dashboards.
-- Use MWAA or Astronomer Cloud for production Airflow deployment.
-- Use `PromptRegistry` version pinning in production to prevent unintended prompt changes.
+Actions:
+
+```bash
+make graph-up
+make graph-sync
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474
+```
+
+Recovery:
+
+- Ensure MySQL ODS tables contain customer, employee, article_inventory data.
+- Re-run `make graph-sync` after upstream ingestion catches up.
+
+## 10) Controlled Restart and Shutdown
+
+Targeted restarts:
+
+```bash
+docker compose -f container/docker-compose.yaml restart <service>
+```
+
+Core restart:
+
+```bash
+make restart
+```
+
+Full restart:
+
+```bash
+make restart-full
+```
+
+Shutdown:
+
+```bash
+make down
+```
+
+## 11) Rollback Procedure
+
+Use when a config or code change introduces instability.
+
+1. Revert the last known-bad change in git.
+2. Restart only impacted services first.
+3. Re-run Procedure E (End-to-End Health Certification).
+4. If still failing, execute `make restart-full` and re-certify.
+
+## 12) Reference Endpoints
+
+- API: http://localhost:8000
+- Schema Registry: http://localhost:8081
+- Flink Dashboard: http://localhost:8082
+- Kafka Connect: http://localhost:8083
+- Airflow UI: http://localhost:8085
+- Conduktor: http://localhost:8086
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+- Qdrant: http://localhost:6333/dashboard
+- Feast Server: http://localhost:6566
+- Neo4j Browser: http://localhost:7474
+
+## 13) Monitoring Guide (Platform, UI, and curl)
+
+Use this matrix during daily operations and incident triage. For each platform, first open the UI for context, then run the curl check for a binary health signal.
+
+| Platform        | What to monitor                                         | UI                              | curl check                                                                     | Healthy signal                                                     |
+| --------------- | ------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| AOIP API        | API readiness and auth/runtime wiring                   | http://localhost:8000/docs      | `curl --noproxy '*' -sf http://localhost:8000/health`                          | HTTP 200 with health payload                                       |
+| Schema Registry | Avro schema availability and compatibility path         | http://localhost:8081           | `curl --noproxy '*' -sf http://localhost:8081/subjects`                        | JSON array returned                                                |
+| Kafka Connect   | Connector lifecycle, task failures, and rebalance churn | http://localhost:8083           | `curl --noproxy '*' -sf http://localhost:8083/connectors`                      | Connector list returned                                            |
+| Flink           | JobManager status, running jobs, and failed restarts    | http://localhost:8082           | `curl --noproxy '*' -sf http://localhost:8082/overview`                        | JSON overview with task slots/job stats                            |
+| Airflow         | Scheduler heartbeat and webserver health                | http://localhost:8085           | `curl --noproxy '*' -sf http://localhost:8085/health`                          | JSON status for metadatabase/scheduler                             |
+| Conduktor       | Kafka control plane UX availability                     | http://localhost:8086           | `curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:8086` | HTTP 200/302                                                       |
+| Prometheus      | Rule eval health, scrape stability, active alerts       | http://localhost:9090           | `curl --noproxy '*' -sf http://localhost:9090/api/v1/targets`                  | `"status":"success"` and healthy targets                           |
+| Grafana         | Dashboard server and data source rendering path         | http://localhost:3000           | `curl --noproxy '*' -sf http://localhost:3000/api/health`                      | JSON with `"database":"ok"`                                        |
+| Qdrant          | Vector DB liveness and collection serving               | http://localhost:6333/dashboard | `curl --noproxy '*' -sf http://localhost:6333/healthz`                         | `ok` response                                                      |
+| Feast Server    | Feature-serving endpoint reachability                   | http://localhost:6566           | `curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:6566` | HTTP response code returned (typically 200/404 depending on route) |
+| Neo4j           | Graph service readiness and relationship query surface  | http://localhost:7474           | `curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:7474` | HTTP 200/302                                                       |
+
+Monitoring workflow:
+
+1. Open the UI and confirm the control plane loads.
+2. Run the curl check and confirm the healthy signal.
+3. If curl fails but UI loads, inspect auth/proxy mismatch.
+4. If both fail, restart only the affected service and re-check.
+
+## 14) Key Environment Variables
+
+- AOIP_LLM\_\_PROVIDER: `ollama` or `anthropic`
+- AOIP_LLM\_\_MODEL: provider model id
+- ANTHROPIC_API_KEY: required for anthropic provider
+- AOIP_LLM\_\_OLLAMA_BASE_URL: required for ollama provider
+- AOIP_LLM\_\_OLLAMA_TIMEOUT_SECONDS: ollama HTTP timeout
+- AOIP_AUTH_DISABLED: disable auth for local development when `true`
+- AOIP_NEO4J\_\_URI: Neo4j Bolt URI (for example `bolt://neo4j:7687`)
+- AOIP_NEO4J\_\_USERNAME: Neo4j username
+- NEO4J_PASSWORD: Neo4j password used by graph sync
+- PRODUCE_INTERVAL: synthetic producer interval in seconds
+- QDRANT_HOST: qdrant hostname override
+- EMBEDDING_MODEL: sentence-transformers model name
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

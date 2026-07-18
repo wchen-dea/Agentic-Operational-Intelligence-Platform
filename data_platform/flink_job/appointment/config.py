@@ -1,3 +1,5 @@
+"""Module for config."""
+
 import json
 import os
 

@@ -26,22 +26,49 @@ pivoted as (
         kafka_partition,
 
         case when cdc_op = 'd'
-             then get_json_object(before_json, '$.id')
-             else get_json_object(after_json,  '$.id')
+             then coalesce(
+                 get_json_object(before_json, '$.id'),
+                 concat_ws(':', get_json_object(before_json, '$.article_number'), get_json_object(before_json, '$.site_number'), get_json_object(before_json, '$.inventory_date'))
+             )
+             else coalesce(
+                 get_json_object(after_json, '$.id'),
+                 concat_ws(':', get_json_object(after_json, '$.article_number'), get_json_object(after_json, '$.site_number'), get_json_object(after_json, '$.inventory_date'))
+             )
         end                                                                 as snapshot_id,
 
-        get_json_object(after_json, '$.sku_id')                             as sku_id,
-        get_json_object(after_json, '$.store_id')                           as store_id,
-        get_json_object(after_json, '$.article_id')                         as article_id,
-        cast(get_json_object(after_json, '$.snapshot_date')  as date)       as snapshot_date,
-        cast(get_json_object(after_json, '$.quantity_on_hand')  as int)     as quantity_on_hand,
-        cast(get_json_object(after_json, '$.quantity_reserved') as int)     as quantity_reserved,
-        cast(get_json_object(after_json, '$.quantity_available') as int)    as quantity_available,
-        cast(get_json_object(after_json, '$.reorder_point')  as int)        as reorder_point,
-        get_json_object(after_json, '$.in_stock')                           as in_stock,
-        cast(get_json_object(after_json, '$.unit_cost')       as double)    as unit_cost,
-        cast(get_json_object(after_json, '$.created_at')     as timestamp)  as created_at,
-        cast(get_json_object(after_json, '$.updated_at')     as timestamp)  as updated_at,
+        coalesce(
+            get_json_object(after_json, '$.sku_id'),
+            get_json_object(after_json, '$.article_number')
+        )                                                                   as sku_id,
+        coalesce(
+            get_json_object(after_json, '$.store_id'),
+            get_json_object(after_json, '$.site_number')
+        )                                                                   as store_id,
+        coalesce(
+            get_json_object(after_json, '$.article_id'),
+            get_json_object(after_json, '$.article_number')
+        )                                                                   as article_id,
+        coalesce(
+            cast(get_json_object(after_json, '$.snapshot_date') as date),
+            cast(date_add(to_date('1970-01-01'), cast(get_json_object(after_json, '$.inventory_date') as int)) as date)
+        )                                                                   as snapshot_date,
+        cast(coalesce(get_json_object(after_json, '$.quantity_on_hand'), get_json_object(after_json, '$.on_hand_quantity')) as int) as quantity_on_hand,
+        cast(coalesce(get_json_object(after_json, '$.quantity_reserved'), get_json_object(after_json, '$.reserved_quantity')) as int) as quantity_reserved,
+        cast(coalesce(get_json_object(after_json, '$.quantity_available'), get_json_object(after_json, '$.available_quantity')) as int) as quantity_available,
+        cast(get_json_object(after_json, '$.reorder_point') as int)         as reorder_point,
+        coalesce(
+            get_json_object(after_json, '$.in_stock'),
+            case when cast(coalesce(get_json_object(after_json, '$.available_quantity'), '0') as int) > 0 then 'true' else 'false' end
+        )                                                                   as in_stock,
+        cast(get_json_object(after_json, '$.unit_cost') as double)          as unit_cost,
+        coalesce(
+            cast(get_json_object(after_json, '$.created_at') as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.db_create_timestamp') as bigint) / 1000) as timestamp)
+        )                                                                   as created_at,
+        coalesce(
+            cast(get_json_object(after_json, '$.updated_at') as timestamp),
+            cast(from_unixtime(cast(get_json_object(after_json, '$.db_update_timestamp') as bigint) / 1000) as timestamp)
+        )                                                                   as updated_at,
 
         after_json                                                          as _after_json,
         before_json                                                         as _before_json

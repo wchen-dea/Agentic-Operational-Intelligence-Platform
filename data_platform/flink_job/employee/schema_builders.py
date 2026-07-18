@@ -1,3 +1,5 @@
+"""Module for schema builders."""
+
 from pyflink.table import Schema, DataTypes
 
 

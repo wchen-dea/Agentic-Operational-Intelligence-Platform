@@ -1,0 +1,57 @@
+groups:
+- name: major-cluster-health
+  rules:
+  - alert: KafkaClusterDegraded
+    expr: 'min(probe_success{job="blackbox_http",instance=~"http://(kafka-connect:8083/connectors|schema-registry:8081/subjects)"}) < 1'
+    for: 2m
+    labels:
+      severity: critical
+      cluster: kafka
+    annotations:
+      summary: Kafka cluster broker availability degraded
+      description: Kafka control-plane endpoints are not reachable for more than 2 minutes.
+  - alert: FlinkJobManagerDown
+    expr: 'probe_success{job="blackbox_http",instance="http://flink-jobmanager:8081/overview"} == 0'
+    for: 2m
+    labels:
+      severity: critical
+      cluster: flink
+    annotations:
+      summary: Flink JobManager endpoint is down
+      description: Flink JobManager /overview endpoint has been unreachable for more than 2 minutes.
+  - alert: SparkMasterDown
+    expr: 'probe_success{job="blackbox_http",instance="http://spark-master:8080"} == 0'
+    for: 2m
+    labels:
+      severity: critical
+      cluster: spark
+    annotations:
+      summary: Spark master UI is down
+      description: Spark master endpoint has been unreachable for more than 2 minutes.
+  - alert: AirflowWebserverDown
+    expr: 'probe_success{job="blackbox_http",instance="http://airflow-webserver:8080/health"} == 0'
+    for: 2m
+    labels:
+      severity: critical
+      cluster: airflow
+    annotations:
+      summary: Airflow webserver health endpoint is down
+      description: Airflow /health endpoint has been unreachable for more than 2 minutes.
+- name: major-cluster-latency
+  rules:
+  - alert: ClusterProbeLatencyHigh
+    expr: 'probe_duration_seconds{job=~"blackbox_(http|tcp)"} > 2'
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Cluster probe latency is elevated
+      description: Probe latency is above 2 seconds for at least 5 minutes on {{ $labels.instance }}.
+  - alert: ClusterEndpointDown
+    expr: 'probe_success{job=~"blackbox_(http|tcp)",instance!~"broker[123]:29092"} == 0'
+    for: 3m
+    labels:
+      severity: warning
+    annotations:
+      summary: Cluster endpoint down
+      description: Endpoint {{ $labels.instance }} has been unreachable for more than 3 minutes.

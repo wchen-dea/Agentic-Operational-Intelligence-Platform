@@ -1,5 +1,5 @@
 project: aoip_feature_store
-registry: s3a://warehouse/feast/registry.db
+registry: s3://warehouse/feast/registry.db
 provider: local
 # ---------------------------------------------------------------------------
 # Offline store — reads from Iceberg analytics layer via Spark

@@ -6,16 +6,16 @@ Production deployment topology for the platform on Kubernetes, with AWS-managed 
 
 Each pipeline stage maps to one or more Kubernetes workloads or AWS managed services:
 
-| Stage | Local (docker-compose) | Kubernetes / AWS |
-|-------|----------------------|-----------------|
-| 1 — Ingestion | `producer` container | Kubernetes `Deployment` or AWS MSK Connect source |
-| 2 — Flink | Flink standalone cluster | AWS Managed Flink (KDA) or Flink on EKS |
-| 3 — Kafka Connect | `kafka-connect` container | MSK Connect JDBC Sink plugins |
-| 4 — AI Systems | FastAPI `app` container | EKS `Deployment` (multiple replicas) + HPA |
-| 5 — Debezium CDC | Kafka Connect `cdc-init` | MSK Connect Debezium plugin |
-| 6 — Spark Streaming | `spark-cdc-streaming` container | EMR Serverless or Databricks Structured Streaming |
-| 7 — dbt Lakehouse | Airflow `dbt-runner` + Spark Thrift | MWAA (Managed Airflow) + Databricks SQL |
-| 8 — Analytics / ML | `feast-server` + `qdrant` containers | AWS SageMaker Feature Store + OpenSearch |
+| Stage               | Local (docker-compose)               | Kubernetes / AWS                                  |
+| ------------------- | ------------------------------------ | ------------------------------------------------- |
+| 1 — Ingestion       | `producer` container                 | Kubernetes `Deployment` or AWS MSK Connect source |
+| 2 — Flink           | Flink standalone cluster             | AWS Managed Flink (KDA) or Flink on EKS           |
+| 3 — Kafka Connect   | `kafka-connect` container            | MSK Connect JDBC Sink plugins                     |
+| 4 — AI Systems      | FastAPI `app` container              | EKS `Deployment` (multiple replicas) + HPA        |
+| 5 — Debezium CDC    | Kafka Connect `cdc-init`             | MSK Connect Debezium plugin                       |
+| 6 — Spark Streaming | `spark-cdc-streaming` container      | EMR Serverless or Databricks Structured Streaming |
+| 7 — dbt Lakehouse   | Airflow `dbt-runner` + Spark Thrift  | MWAA (Managed Airflow) + Databricks SQL           |
+| 8 — Analytics / ML  | `feast-server` + `qdrant` containers | AWS SageMaker Feature Store + OpenSearch          |
 
 ## Kubernetes cluster layout
 
@@ -208,27 +208,35 @@ spec:
 
 ## Production replacements
 
-| Local component | Production equivalent | Notes |
-|----------------|----------------------|-------|
-| Kafka (docker-compose) | Amazon MSK (3-broker, multi-AZ) | Same Kafka protocol; update `KAFKA_BROKERS` |
-| Schema Registry | Confluent Schema Registry on MSK Connect | Same API |
-| Flink standalone | AWS Managed Apache Flink (KDA) | Same PyFlink jobs, add KDA deployment config |
-| MySQL ODS | Amazon Aurora MySQL (Multi-AZ) | Same JDBC URL pattern |
-| MinIO | Amazon S3 | Change `s3a://` endpoint to S3 ARN |
-| Iceberg REST catalog | AWS Glue Data Catalog | Set `spark.sql.catalog.iceberg.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog` |
-| Spark (local) | Amazon EMR Serverless or Databricks | Same PySpark code |
-| Airflow (LocalExecutor) | Amazon MWAA or Astronomer | Same DAG code |
-| Redis (docker) | Amazon ElastiCache Redis | Update `AOIP_REDIS__URL` |
-| SQLite session memory | Amazon DynamoDB | Swap `PersistentSessionMemory` backend |
-| Qdrant (docker) | Amazon OpenSearch with k-NN plugin | Update `QDRANT_HOST` |
-| Feast (docker) | Amazon SageMaker Feature Store | Update Feast provider in `data_platform/feature_store/feature_store.yaml` |
-| ChromaDB (in-process) | Amazon OpenSearch / pgvector | Update hybrid search config |
+| Local component         | Production equivalent                    | Notes                                                                                |
+| ----------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| Kafka (docker-compose)  | Amazon MSK (3-broker, multi-AZ)          | Same Kafka protocol; update `KAFKA_BROKERS`                                          |
+| Schema Registry         | Confluent Schema Registry on MSK Connect | Same API                                                                             |
+| Flink standalone        | AWS Managed Apache Flink (KDA)           | Same PyFlink jobs, add KDA deployment config                                         |
+| MySQL ODS               | Amazon Aurora MySQL (Multi-AZ)           | Same JDBC URL pattern                                                                |
+| MinIO                   | Amazon S3                                | Change `s3a://` endpoint to S3 ARN                                                   |
+| Iceberg REST catalog    | AWS Glue Data Catalog                    | Set `spark.sql.catalog.iceberg.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog` |
+| Spark (local)           | Amazon EMR Serverless or Databricks      | Same PySpark code                                                                    |
+| Airflow (LocalExecutor) | Amazon MWAA or Astronomer                | Same DAG code                                                                        |
+| Redis (docker)          | Amazon ElastiCache Redis                 | Update `AOIP_REDIS__URL`                                                             |
+| SQLite session memory   | Amazon DynamoDB                          | Swap `PersistentSessionMemory` backend                                               |
+| Qdrant (docker)         | Amazon OpenSearch with k-NN plugin       | Update `QDRANT_HOST`                                                                 |
+| Feast (docker)          | Amazon SageMaker Feature Store           | Update Feast provider in `data_platform/feature_store/feature_store.yaml`            |
+| ChromaDB (in-process)   | Amazon OpenSearch / pgvector             | Update hybrid search config                                                          |
 
 ## Architecture decision records relevant to deployment
 
-| ADR | Decision | Status |
-|-----|----------|--------|
-| [ADR-001](adr/001-aurora-mysql-as-source-system.md) | Aurora MySQL as source system — binlog CDC via DMS or Debezium | Accepted |
-| [ADR-005](adr/005-debezium-cdc-mysql-ods-to-kafka.md) | Debezium CDC from MySQL ODS to Kafka | Accepted |
-| [ADR-008](adr/008-medallion-lakehouse-dbt-core.md) | Medallion lakehouse on Iceberg (landing/bronze/silver/gold/analytics) | Accepted |
-| [ADR-022](adr/022-uv-python-dependency-management.md) | uv for Python dependency management — deterministic Docker builds | Accepted |
+| ADR                                                   | Decision                                                              | Status   |
+| ----------------------------------------------------- | --------------------------------------------------------------------- | -------- |
+| [ADR-001](adr/001-enterprise-source-integration-and-aurora-boundary.md)   | Aurora MySQL as source system — binlog CDC via DMS or Debezium        | Accepted |
+| [ADR-008](adr/008-debezium-cdc-mysql-ods-to-kafka.md) | Debezium CDC from MySQL ODS to Kafka                                  | Accepted |
+| [ADR-010](adr/010-medallion-lakehouse-dbt-core.md)    | Medallion lakehouse on Iceberg (landing/bronze/silver/gold/analytics) | Accepted |
+| [ADR-004](adr/004-uv-python-dependency-management.md) | uv for Python dependency management — deterministic Docker builds     | Accepted |
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

@@ -1,3 +1,5 @@
+"""Module for schema builders."""
+
 from pyflink.table import Schema, DataTypes
 from flink_job.customer.data_types import get_contacts, get_alternate_identifiers, get_vehicles
 

@@ -1,3 +1,5 @@
+"""Module for app."""
+
 import logging
 import os
 from contextlib import asynccontextmanager

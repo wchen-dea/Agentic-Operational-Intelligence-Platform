@@ -110,3 +110,11 @@ The following metrics are goals and require implementation in emitters/trackers 
 - `sales_recovery_after_alert`
 - `branded_mix_uplift_after_recommendation`
 - `underperforming_store_recovery_rate`
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](../../docs/terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](../../docs/markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

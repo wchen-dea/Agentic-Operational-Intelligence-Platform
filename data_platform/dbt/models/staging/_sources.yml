@@ -8,7 +8,7 @@ sources:
   loader: spark-structured-streaming
   tables:
   - name: sales_orders
-    description: "CDC log for retail_ops.aurora.retail_ops.sales_orders"
+    description: "CDC log for cdc_sales_order"
     columns: &cdc_envelope
     - name: kafka_topic
       description: Kafka topic the message was consumed from
@@ -35,14 +35,14 @@ sources:
     - name: ingested_at
       description: Timestamp when Spark wrote this row to MinIO
   - name: appointments
-    description: "CDC log for retail_ops.aurora.retail_ops.appointments"
+    description: "CDC log for cdc_appointment"
     columns: *cdc_envelope
   - name: sales_order_receipts
-    description: "CDC log for retail_ops.aurora.retail_ops.sales_order_receipts"
+    description: "CDC log for cdc_sales_order_receipt"
     columns: *cdc_envelope
   - name: work_orders
-    description: "CDC log for retail_ops.aurora.retail_ops.work_orders"
+    description: "CDC log for cdc_work_order"
     columns: *cdc_envelope
   - name: article_inventory
-    description: "CDC log for retail_ops.aurora.retail_ops.article_inventory"
+    description: "CDC log for cdc_article_inventory"
     columns: *cdc_envelope

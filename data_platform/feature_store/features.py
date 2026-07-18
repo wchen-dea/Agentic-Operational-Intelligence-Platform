@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from feast import Entity, FeatureStore, FeatureView, Field
+from feast import Entity, FeatureStore, FeatureView, Field, ValueType
 from feast.infra.offline_stores.contrib.spark_offline_store.spark_source import (
     SparkSource,
 )
@@ -33,13 +33,13 @@ from feast.types import Float32, Float64, Int64, String, UnixTimestamp
 store = Entity(
     name="store_id",
     description="Retail store identifier",
-    value_type=String,
+    value_type=ValueType.STRING,
 )
 
 customer = Entity(
     name="customer_id",
     description="Customer identifier across all operational domains",
-    value_type=String,
+    value_type=ValueType.STRING,
 )
 
 # ---------------------------------------------------------------------------

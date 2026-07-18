@@ -1,3 +1,5 @@
+"""Module for threshold config."""
+
 from typing import Any
 
 from ai_systems.config.settings import settings

@@ -14,8 +14,8 @@ cdc:
   mode: aurora_mysql_cdc
   connector: aws_dms
   transport: kafka_msk
-  topic_prefix: retail_ops.aurora
-  topic_pattern: retail_ops.aurora.<schema>.<table>
+  topic_prefix: cdc
+  topic_pattern: cdc_<table>
   bronze_table_pattern: bronze.<table>_cdc
   silver_table_pattern: silver.<table>
   checkpoint_location: dbfs:/checkpoints/aurora_mysql_cdc

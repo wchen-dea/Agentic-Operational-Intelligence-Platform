@@ -1,3 +1,5 @@
+"""Module for logging util."""
+
 import logging
 import sys
 from datetime import datetime

@@ -1,3 +1,5 @@
+"""Module for operations."""
+
 from fastapi import APIRouter, Depends
 
 from ai_systems.gateway.api.auth import APIKeyRecord, require_auth

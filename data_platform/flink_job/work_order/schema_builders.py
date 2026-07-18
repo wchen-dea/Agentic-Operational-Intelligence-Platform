@@ -1,3 +1,5 @@
+"""Module for schema builders."""
+
 from pyflink.table import Schema, DataTypes
 from flink_job.work_order.data_types import (
     get_line_items,

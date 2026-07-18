@@ -1,3 +1,5 @@
+"""Module for kpi agent."""
+
 from typing import Any
 
 from data_platform.kpi_store import StoreKPISnapshot, fetch_store_kpis

@@ -4,7 +4,9 @@ AI operations platform for store managers and executives — real-time KPI monit
 
 ## Pipeline architecture
 
-The platform is composed of eight sequential, independently deployable pipeline stages:
+The platform is composed of nine sequential, independently deployable pipeline stages:
+
+At the ingestion boundary, the platform represents an enterprise integration layer that unifies source domains (ERP, CRM, workforce, vehicle inspection, MDM, and reference systems) into canonical topics across real-time, near real-time, and batch cadences. In this project, synthetic data generation is used to mirror those sourcing systems and preserve production-like canonical flows.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -41,7 +43,7 @@ The platform is composed of eight sequential, independently deployable pipeline 
 │ Stage 5 · Debezium CDC → Kafka                                             │
 │ Debezium connector captures MySQL ODS changes → CDC Kafka topics           │
 │ container/scripts/register_cdc_connector.py                                │
-│ Topics: retail_ops.aurora.retail_ops.<table>                               │
+│ Topics: cdc_<table>                                                         │
 └───────────────────────────────────┬─────────────────────────────────────────┘
                                     │ CDC envelope: before/after/op/ts_ms
                                     ▼
@@ -66,25 +68,34 @@ The platform is composed of eight sequential, independently deployable pipeline 
 │ ├─ Semantic Layer   dbt MetricFlow — 9 named metrics                       │
 │ └─ Vector Index     Qdrant store_kpi_narratives + metric_definitions :6333  │
 │ data_platform/feature_store/   data_platform/vector_index/                 │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │ ODS + iceberg.gold.gold_store_kpis
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Stage 9 · Graph Projection (Neo4j)                                         │
+│ ├─ ODS relationships: article-store, employee-store, customer-store         │
+│ ├─ Gold projection: Store -> HAS_KPI_SNAPSHOT -> StoreKPI                   │
+│ └─ Validation: make graph-check                                              │
+│ data_platform/graph/   Neo4j :7474/:7687                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Documentation
 
-| Doc | Contents |
-|-----|----------|
-| [Data Platform Architecture](docs/architecture_data_platform.md) | 8-stage pipeline · Kafka · Flink · MySQL ODS · Debezium · Spark · dbt Iceberg lakehouse · analytics/ML |
-| [AI Systems Architecture](docs/architecture_ai_systems.md) | Agents · LLM · RAG · orchestration · skills · guardrails · ADRs |
-| [Observability Architecture](docs/architecture_observability.md) | Metrics catalog · LLM evaluation · distributed tracing |
-| [Local Development Architecture](docs/architecture_local.md) | Docker Compose services · startup sequence · resource limits · endpoints |
-| [Kubernetes / Production Architecture](docs/architecture_amazon_eks.md) | EKS layout · AWS managed services · HPA · secrets · production replacements |
-| [System Overview](docs/system_overview.md) | 8-stage table · reference flowcharts · agent orchestration · implementation reference |
-| [Frameworks and Design Patterns](docs/frameworks_and_design_patterns.md) | Technology stack by layer + concrete code-level pattern mapping |
-| [KPI Definitions](docs/kpi_definitions.md) | 16 business KPIs with units, direction, and alert thresholds |
-| [Copilot UI](docs/copilot_ui.md) | Front-end integration guide · API priority order · auth |
-| [CI/CD Automation](docs/cicd_automation.md) | GitHub Actions pipeline · branch strategy · deployment · coverage gate |
-| [Runbook](docs/runbook.md) | Setup · make targets · per-stage commands · API reference · troubleshooting |
-| [ADRs](docs/adr/README.md) | 22 architecture decision records across data platform, AI systems, and infrastructure |
+| Doc                                                                      | Contents                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| [Data Platform Architecture](docs/architecture-data-platform.md)         | 8-stage data pipeline subset of the 9-stage platform · Kafka · Flink · MySQL ODS · Debezium · Spark · dbt · analytics/ML · Neo4j graph |
+| [AI Systems Architecture](docs/architecture-ai-systems.md)               | Agents · LLM · RAG · orchestration · skills · guardrails · ADRs                                        |
+| [Observability Architecture](docs/architecture-observability.md)         | Metrics catalog · LLM evaluation · distributed tracing                                                 |
+| [Local Development Architecture](docs/architecture-local.md)             | Docker Compose services · startup sequence · resource limits · endpoints                               |
+| [Kubernetes / Production Architecture](docs/architecture-amazon-eks.md)  | EKS layout · AWS managed services · HPA · secrets · production replacements                            |
+| [System Overview](docs/system-overview.md)                               | 9-stage table · reference flowcharts · agent orchestration · implementation reference                  |
+| [Frameworks and Design Patterns](docs/frameworks-and-design-patterns.md) | Technology stack by layer + concrete code-level pattern mapping                                        |
+| [KPI Definitions](docs/kpi-definitions.md)                               | 16 business KPIs with units, direction, and alert thresholds                                           |
+| [Copilot UI](docs/copilot-ui.md)                                         | Front-end integration guide · API priority order · auth                                                |
+| [CI/CD Automation](docs/cicd-automation.md)                              | GitHub Actions pipeline · branch strategy · deployment · coverage gate                                 |
+| [Runbook](docs/runbook.md)                                               | Setup · make targets · per-stage commands · API reference · troubleshooting                            |
+| [ADRs](docs/adr/README.md)                                               | 24 architecture decision records across data platform, AI systems, and infrastructure                  |
 
 ## Quick start
 
@@ -93,8 +104,10 @@ make install        # create .venv and install all dependency groups
 make env            # create .env
 # local Ollama: AOIP_LLM__PROVIDER=ollama, AOIP_LLM__MODEL=llama3.1:8b
 # production Anthropic: AOIP_LLM__PROVIDER=anthropic, ANTHROPIC_API_KEY=...
-make up             # start all infrastructure services
+make up             # start core services only (app, redis, mysql, kafka, connect)
+make up-full        # start full stack (lakehouse + airflow + analytics + flink)
 make produce        # start synthetic Kafka producer (15 canonical topics)
+make graph-sync      # sync article/store, employee/store, customer/store to Neo4j
 make test           # run test suite
 ```
 
@@ -171,6 +184,7 @@ data_platform/
     macros/          generate_schema_name, delete_cdc_rows
   feature_store/     Feast — offline: Iceberg analytics; online: Redis
   vector_index/      Qdrant indexer — store_kpi_narratives, metric_definitions
+  graph/             Neo4j relationship sync (article-store, employee-store, customer-store)
   flink_job/         14 PyFlink jobs (canonical → PDM sink topics)
     start_flink_job.sh        submit one pipeline
     start_flink_job_all.py    submit all 14
@@ -194,7 +208,8 @@ All dev workflows go through `make`. Run `make help` for the full reference.
 ### Infrastructure
 
 ```bash
-make up                               # start all services (Kafka, MySQL, Redis, app, Conduktor…)
+make up                               # start core services
+make up-full                          # start full stack
 make produce                          # start synthetic Avro producer (15 canonical topics)
 make down                             # stop all containers
 ```
@@ -228,6 +243,7 @@ make airflow-trigger                  # fire dbt_lakehouse_pipeline manually
 `data_platform.producer.mdm.master_batch`.
 
 `data_platform.producer.transaction.realtime` performs a startup preflight that:
+
 - Loads canonical IDs already produced by MDM topics.
 - Rebinds transaction FK pools to those canonical IDs.
 - Validates sampled transaction records for FK existence.
@@ -237,9 +253,23 @@ make airflow-trigger                  # fire dbt_lakehouse_pipeline manually
 
 ```bash
 make analytics-up                     # start Qdrant + Feast feature server
-make analytics-materialize            # push analytics features to Redis
+make analytics-materialize            # apply Feast + materialize features to Redis (prebuilt runtime)
 make analytics-index                  # build Qdrant vector indexes from gold
 ```
+
+### Graph relationships (Neo4j)
+
+```bash
+make graph-up                         # start Neo4j
+make graph-sync                       # sync ODS relationships + gold KPI snapshots to Neo4j
+make graph-check                      # print Cypher counts by relationship type
+make graph-down                       # stop Neo4j
+```
+
+Notes:
+
+- `analytics-materialize` now uses the prebuilt `feast-server` image (Java + pinned Spark runtime baked in) and no longer installs apt/pip dependencies at runtime.
+- `vector-indexer` resolves KPI sources in order from `KPI_SOURCE_TABLES` (default: `warehouse.gold_store_kpis,iceberg.gold.gold_store_kpis`) and falls back to deterministic sample rows only when `KPI_FALLBACK_MODE=sample`.
 
 ### Local API development
 
@@ -250,45 +280,54 @@ make test && make lint && make typecheck
 
 ## Service endpoints
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Platform API | http://localhost:8000 | `X-API-Key` header |
-| Conduktor | http://localhost:8086 | admin@conduktor.io / admin |
-| Schema Registry | http://localhost:8081 | — |
-| Flink Dashboard | http://localhost:8082 | — |
-| Kafka Connect | http://localhost:8083 | — |
-| Airflow UI | http://localhost:8085 | admin / admin |
-| Spark Master | http://localhost:4040 | — |
-| Iceberg REST | http://localhost:8181 | — |
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| Qdrant | http://localhost:6333/dashboard | — |
-| Feast Server | http://localhost:6566 | — |
+| Service         | URL                             | Credentials                |
+| --------------- | ------------------------------- | -------------------------- |
+| Platform API    | http://localhost:8000           | `X-API-Key` header         |
+| Conduktor       | http://localhost:8086           | admin@conduktor.io / admin |
+| Schema Registry | http://localhost:8081           | —                          |
+| Flink Dashboard | http://localhost:8082           | —                          |
+| Kafka Connect   | http://localhost:8083           | —                          |
+| Airflow UI      | http://localhost:8085           | admin / admin              |
+| Spark Master    | http://localhost:4040           | —                          |
+| Iceberg REST    | http://localhost:8181           | —                          |
+| MinIO Console   | http://localhost:9001           | minioadmin / minioadmin    |
+| Qdrant          | http://localhost:6333/dashboard | —                          |
+| Feast Server    | http://localhost:6566           | —                          |
+| Neo4j Browser   | http://localhost:7474           | neo4j / neo4j              |
 
 ## Data conventions
 
-| Concept | Convention |
-|---------|------------|
-| CDC Kafka topic | `retail_ops.aurora.retail_ops.<table>` |
-| Iceberg landing | `iceberg.landing.<table>` (Spark-managed, append-only) |
-| Iceberg bronze | `iceberg.bronze.<table>` (CDC flattened, append) |
-| Iceberg silver | `iceberg.silver.<table>` (current state, merge + delete) |
-| Iceberg gold | `iceberg.gold.gold_store_kpis` (daily KPI aggregation) |
-| Iceberg analytics | `iceberg.analytics.feat_*` (ML feature tables) |
-| Feast online | Redis DB 1 (feature key: `store_id` or `customer_id`) |
-| Qdrant collections | `store_kpi_narratives`, `metric_definitions` |
+| Concept            | Convention                                               |
+| ------------------ | -------------------------------------------------------- |
+| CDC Kafka topic    | `cdc_<table>`                                            |
+| Iceberg landing    | `iceberg.landing.<table>` (Spark-managed, append-only)   |
+| Iceberg bronze     | `iceberg.bronze.<table>` (CDC flattened, append)         |
+| Iceberg silver     | `iceberg.silver.<table>` (current state, merge + delete) |
+| Iceberg gold       | `iceberg.gold.gold_store_kpis` (daily KPI aggregation)   |
+| Iceberg analytics  | `iceberg.analytics.feat_*` (ML feature tables)           |
+| Feast online       | Redis DB 1 (feature key: `store_id` or `customer_id`)    |
+| Qdrant collections | `store_kpi_narratives`, `metric_definitions`             |
 
 ## Design intent
 
 Built around an open-source, locally-runnable data lakehouse — swap components for cloud-managed equivalents as you scale:
 
-| Local (this repo) | Production equivalent |
-|---|---|
-| Kafka (KRaft, 3 brokers) | AWS MSK / Confluent Cloud |
-| Flink standalone cluster | AWS Managed Flink / Databricks |
-| Spark + MinIO (Iceberg) | AWS EMR + S3 + Glue Catalog |
-| dbt-spark (Thrift Server) | Databricks SQL / dbt Cloud |
-| Airflow (LocalExecutor) | MWAA / Astronomer |
-| Redis (online features) | DynamoDB / AWS ElastiCache |
-| Qdrant (vector search) | OpenSearch / Pinecone |
-| Feast (feature store) | AWS SageMaker Feature Store |
-| ChromaDB (RAG) | AWS OpenSearch / pgvector |
+| Local (this repo)         | Production equivalent          |
+| ------------------------- | ------------------------------ |
+| Kafka (KRaft, 3 brokers)  | AWS MSK / Confluent Cloud      |
+| Flink standalone cluster  | AWS Managed Flink / Databricks |
+| Spark + MinIO (Iceberg)   | AWS EMR + S3 + Glue Catalog    |
+| dbt-spark (Thrift Server) | Databricks SQL / dbt Cloud     |
+| Airflow (LocalExecutor)   | MWAA / Astronomer              |
+| Redis (online features)   | DynamoDB / AWS ElastiCache     |
+| Qdrant (vector search)    | OpenSearch / Pinecone          |
+| Feast (feature store)     | AWS SageMaker Feature Store    |
+| ChromaDB (RAG)            | AWS OpenSearch / pgvector      |
+
+## Terminology Glossary
+
+Use canonical definitions from [Terminology Glossary](docs/terminology-glossary.md) when describing platform components, data layers, and AI workflows.
+
+## Structural Formatting Standard
+
+This document follows the shared [Markdown Structure Standard](docs/markdown-structure-standard.md) for heading hierarchy, section order, procedure formatting, and link conventions.

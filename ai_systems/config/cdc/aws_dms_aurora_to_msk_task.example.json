@@ -11,7 +11,7 @@
   "target": {
     "engine": "kafka",
     "broker": "b-1.retail-msk.xxxxxx.c2.kafka.us-east-1.amazonaws.com:9092,b-2.retail-msk.xxxxxx.c2.kafka.us-east-1.amazonaws.com:9092",
-    "topic_prefix": "retail_ops.aurora",
+    "topic_prefix": "cdc",
     "message_format": "json",
     "include_transaction_details": true
   },
@@ -89,7 +89,7 @@
     "stop_task_cached_changes_not_applied": false
   },
   "naming_conventions": {
-    "kafka_topic_pattern": "retail_ops.aurora.<schema>.<table>",
+    "kafka_topic_pattern": "cdc_<table>",
     "bronze_table_pattern": "bronze.<table>_cdc",
     "silver_table_pattern": "silver.<table>",
     "gold_table_pattern": "gold.store_realtime_kpis"

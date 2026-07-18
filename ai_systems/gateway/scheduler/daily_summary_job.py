@@ -1,3 +1,5 @@
+"""Module for daily summary job."""
+
 from ai_systems.orchestration.orchestrator import get_orchestrator
 
 

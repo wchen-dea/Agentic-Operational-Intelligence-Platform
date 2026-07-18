@@ -1,3 +1,5 @@
+"""Module for query."""
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from ai_systems.core.guardrails import validate_input

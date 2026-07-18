@@ -1,3 +1,5 @@
+"""Module for tables."""
+
 from pyflink.table import TableDescriptor
 
 from config import is_aws
